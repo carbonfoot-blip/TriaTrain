@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Save, User, Activity, Gauge, Flame, Download, Upload, RefreshCw, Layers } from 'lucide-react';
+import { X, Save, User, Activity, Gauge, Flame, Download, Upload, RefreshCw, Layers, Heart } from 'lucide-react';
 import { AthleteProfile, RaceDistance, RaceGoal, TargetSport } from '../types/triathlon';
+import { estimateMaxHR } from '../utils/zonesCalculator';
 
 interface ProfileSettingsProps {
   isOpen: boolean;
@@ -19,6 +20,12 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
   const [profile, setProfile] = useState<AthleteProfile>(initialProfile);
   const [saveToast, setSaveToast] = useState<boolean>(false);
+
+  const parseNumberInput = (val: string): number => {
+    if (val === '') return 0;
+    const num = parseFloat(val);
+    return isNaN(num) ? 0 : num;
+  };
 
   const handleSportChange = (sport: TargetSport) => {
     let defaultDist: RaceDistance = 'm';
@@ -47,8 +54,29 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     });
   };
 
+  const handleAutoCalcHR = () => {
+    const estimated = estimateMaxHR(profile.age || 30);
+    setProfile({
+      ...profile,
+      hrMax: estimated,
+    });
+  };
+
   const handleSave = () => {
-    onSaveProfile(profile);
+    const sanitized: AthleteProfile = {
+      ...profile,
+      age: profile.age || 30,
+      weightKg: profile.weightKg || 70,
+      heightCm: profile.heightCm || 175,
+      hrRest: profile.hrRest || 55,
+      hrMax: profile.hrMax || estimateMaxHR(profile.age || 30),
+      bikeMetrics: {
+        ...profile.bikeMetrics,
+        ftpWatts: profile.bikeMetrics.ftpWatts || 200,
+        avgZ2SpeedKmh: profile.bikeMetrics.avgZ2SpeedKmh || 26,
+      },
+    };
+    onSaveProfile(sanitized);
     setSaveToast(true);
     setTimeout(() => {
       setSaveToast(false);
@@ -93,8 +121,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               <User className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-white">Paramètres du Profil & Allures</h3>
-              <p className="text-xs text-slate-400">Ajustez votre sport cible, vos allures ou chargez une sauvegarde</p>
+              <h3 className="text-base font-bold text-white">Paramètres du Profil, FC & Allures</h3>
+              <p className="text-xs text-slate-400">Modifiez vos paramètres : le programme et les allures se recalculent en direct</p>
             </div>
           </div>
 
@@ -112,7 +140,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           <div className="space-y-3 p-4 bg-slate-950/60 rounded-xl border border-slate-800">
             <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center space-x-1.5">
               <Layers className="w-4 h-4" />
-              <span>Discipline Cible & Distance</span>
+              <span>Discipline Cible & Format</span>
             </h4>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -186,7 +214,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Nom de l'épreuve</label>
                 <input
                   type="text"
-                  value={profile.raceObjective.raceName}
+                  value={profile.raceObjective.raceName || ''}
                   onChange={(e) => setProfile({
                     ...profile,
                     raceObjective: { ...profile.raceObjective, raceName: e.target.value }
@@ -206,7 +234,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Nom</label>
                 <input
                   type="text"
-                  value={profile.name}
+                  value={profile.name || ''}
                   onChange={(e) => setProfile({ ...profile, name: e.target.value })}
                   className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs"
                 />
@@ -216,9 +244,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Âge</label>
                 <input
                   type="number"
-                  value={profile.age}
-                  onChange={(e) => setProfile({ ...profile, age: parseInt(e.target.value, 10) || 30 })}
-                  className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs"
+                  value={profile.age === 0 ? '' : profile.age}
+                  onChange={(e) => setProfile({ ...profile, age: parseNumberInput(e.target.value) })}
+                  placeholder="30"
+                  className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs font-mono"
                 />
               </div>
 
@@ -226,9 +255,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Poids (kg)</label>
                 <input
                   type="number"
-                  value={profile.weightKg}
-                  onChange={(e) => setProfile({ ...profile, weightKg: parseFloat(e.target.value) || 70 })}
-                  className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs"
+                  value={profile.weightKg === 0 ? '' : profile.weightKg}
+                  onChange={(e) => setProfile({ ...profile, weightKg: parseNumberInput(e.target.value) })}
+                  placeholder="70"
+                  className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs font-mono"
                 />
               </div>
 
@@ -236,10 +266,54 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Taille (cm)</label>
                 <input
                   type="number"
-                  value={profile.heightCm}
-                  onChange={(e) => setProfile({ ...profile, heightCm: parseInt(e.target.value, 10) || 175 })}
-                  className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs"
+                  value={profile.heightCm === 0 ? '' : profile.heightCm}
+                  onChange={(e) => setProfile({ ...profile, heightCm: parseNumberInput(e.target.value) })}
+                  placeholder="175"
+                  className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs font-mono"
                 />
+              </div>
+            </div>
+          </div>
+
+          {/* Heart Rate Calibration (FC Repos & FC Max) */}
+          <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center space-x-1.5">
+                <Heart className="w-4 h-4" />
+                <span>Fréquence Cardiaque (FC Repos & FC Max)</span>
+              </h4>
+              <button
+                type="button"
+                onClick={handleAutoCalcHR}
+                className="text-[11px] text-cyan-400 hover:text-cyan-300 underline"
+              >
+                Calculer FC Max ({estimateMaxHR(profile.age || 30)} bpm)
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">FC au Repos (bpm au réveil)</label>
+                <input
+                  type="number"
+                  value={profile.hrRest === 0 ? '' : profile.hrRest}
+                  onChange={(e) => setProfile({ ...profile, hrRest: parseNumberInput(e.target.value) })}
+                  placeholder="54"
+                  className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-xs font-mono"
+                />
+                <span className="text-[10px] text-slate-500 mt-0.5 block">Mesurée le matin au réveil</span>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">FC Maximale (bpm)</label>
+                <input
+                  type="number"
+                  value={profile.hrMax === 0 ? '' : profile.hrMax}
+                  onChange={(e) => setProfile({ ...profile, hrMax: parseNumberInput(e.target.value) })}
+                  placeholder="186"
+                  className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-xs font-mono"
+                />
+                <span className="text-[10px] text-slate-500 mt-0.5 block">Fréquence max atteinte à plein effort</span>
               </div>
             </div>
           </div>
@@ -252,7 +326,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Allure EF (Z2)</label>
                 <input
                   type="text"
-                  value={profile.runMetrics.efPaceMinKm}
+                  value={profile.runMetrics.efPaceMinKm || ''}
                   onChange={(e) => setProfile({
                     ...profile,
                     runMetrics: { ...profile.runMetrics, efPaceMinKm: e.target.value }
@@ -265,7 +339,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Allure Seuil (Z4)</label>
                 <input
                   type="text"
-                  value={profile.runMetrics.thresholdPaceMinKm}
+                  value={profile.runMetrics.thresholdPaceMinKm || ''}
                   onChange={(e) => setProfile({
                     ...profile,
                     runMetrics: { ...profile.runMetrics, thresholdPaceMinKm: e.target.value }
@@ -278,7 +352,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Allure Marathon (Z3)</label>
                 <input
                   type="text"
-                  value={profile.runMetrics.marathonPaceMinKm}
+                  value={profile.runMetrics.marathonPaceMinKm || ''}
                   onChange={(e) => setProfile({
                     ...profile,
                     runMetrics: { ...profile.runMetrics, marathonPaceMinKm: e.target.value }
@@ -291,7 +365,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">Allure VMA (Z5)</label>
                 <input
                   type="text"
-                  value={profile.runMetrics.vmaPaceMinKm}
+                  value={profile.runMetrics.vmaPaceMinKm || ''}
                   onChange={(e) => setProfile({
                     ...profile,
                     runMetrics: { ...profile.runMetrics, vmaPaceMinKm: e.target.value }
@@ -310,10 +384,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">FTP Vélo (Watts)</label>
                 <input
                   type="number"
-                  value={profile.bikeMetrics.ftpWatts}
+                  value={profile.bikeMetrics.ftpWatts === 0 ? '' : profile.bikeMetrics.ftpWatts}
                   onChange={(e) => setProfile({
                     ...profile,
-                    bikeMetrics: { ...profile.bikeMetrics, ftpWatts: parseInt(e.target.value, 10) || 200 }
+                    bikeMetrics: { ...profile.bikeMetrics, ftpWatts: parseNumberInput(e.target.value) }
                   })}
                   className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs font-mono"
                 />
@@ -324,10 +398,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <input
                   type="number"
                   step="0.5"
-                  value={profile.bikeMetrics.avgZ2SpeedKmh}
+                  value={profile.bikeMetrics.avgZ2SpeedKmh === 0 ? '' : profile.bikeMetrics.avgZ2SpeedKmh}
                   onChange={(e) => setProfile({
                     ...profile,
-                    bikeMetrics: { ...profile.bikeMetrics, avgZ2SpeedKmh: parseFloat(e.target.value) || 25 }
+                    bikeMetrics: { ...profile.bikeMetrics, avgZ2SpeedKmh: parseNumberInput(e.target.value) }
                   })}
                   className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs font-mono"
                 />
@@ -337,7 +411,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 <label className="block text-[11px] text-slate-400 mb-1">CSS Natation (mm:ss/100m)</label>
                 <input
                   type="text"
-                  value={profile.swimMetrics.cssPacePer100m}
+                  value={profile.swimMetrics.cssPacePer100m || ''}
                   onChange={(e) => setProfile({
                     ...profile,
                     swimMetrics: { ...profile.swimMetrics, cssPacePer100m: e.target.value }

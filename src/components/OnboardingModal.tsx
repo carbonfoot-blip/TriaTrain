@@ -32,6 +32,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
   const targetSport = profile.targetSport || 'triathlon';
 
+  // Helper to parse numbers safely without resetting to default on backspace/empty
+  const parseNumberInput = (val: string): number => {
+    if (val === '') return 0;
+    const num = parseFloat(val);
+    return isNaN(num) ? 0 : num;
+  };
+
   const handleApplyRunHelper = () => {
     if (runHelperType === 'manual') return;
     const extrapolated = extrapolateRunPaces(runHelperValue, runHelperType);
@@ -111,7 +118,25 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       spread: 70,
       origin: { y: 0.6 },
     });
-    onSaveProfile(profile);
+    // Ensure default fallbacks if athlete left a field empty
+    const sanitizedProfile: AthleteProfile = {
+      ...profile,
+      age: profile.age || 30,
+      weightKg: profile.weightKg || 70,
+      heightCm: profile.heightCm || 175,
+      hrRest: profile.hrRest || 55,
+      hrMax: profile.hrMax || estimateMaxHR(profile.age || 30),
+      bikeMetrics: {
+        ...profile.bikeMetrics,
+        ftpWatts: profile.bikeMetrics.ftpWatts || 200,
+        avgZ2SpeedKmh: profile.bikeMetrics.avgZ2SpeedKmh || 26,
+      },
+      availability: {
+        ...profile.availability,
+        maxWeeklyHours: profile.availability.maxWeeklyHours || 8,
+      },
+    };
+    onSaveProfile(sanitizedProfile);
     onClose();
   };
 
@@ -169,7 +194,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
         {/* Step Content */}
         <div className="p-6 max-h-[68vh] overflow-y-auto space-y-6">
-          {/* STEP 1: Discipline selection & Biometrics */}
+          {/* STEP 1: Discipline selection & Biometrics & Heart Rate Inputs */}
           {step === 1 && (
             <div className="space-y-6">
               {/* Main Sport Picker */}
@@ -204,13 +229,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
               {/* Biometrics */}
               <div className="border-t border-slate-800 pt-4 space-y-4">
-                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">2. Données Physiologiques</h3>
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">2. Données Physiologiques & Biométrie</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">Votre Prénom ou Nom d'athlète</label>
                     <input
                       type="text"
-                      value={profile.name}
+                      value={profile.name || ''}
                       onChange={(e) => setProfile({ ...profile, name: e.target.value })}
                       className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
                       placeholder="Ex: Alexandre"
@@ -234,9 +259,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                     <label className="block text-xs font-semibold text-slate-300 mb-1">Âge</label>
                     <input
                       type="number"
-                      value={profile.age}
-                      onChange={(e) => setProfile({ ...profile, age: parseInt(e.target.value, 10) || 30 })}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                      value={profile.age === 0 ? '' : profile.age}
+                      onChange={(e) => setProfile({ ...profile, age: parseNumberInput(e.target.value) })}
+                      placeholder="30"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500 font-mono"
                     />
                   </div>
 
@@ -244,26 +270,59 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                     <label className="block text-xs font-semibold text-slate-300 mb-1">Poids (kg)</label>
                     <input
                       type="number"
-                      value={profile.weightKg}
-                      onChange={(e) => setProfile({ ...profile, weightKg: parseFloat(e.target.value) || 70 })}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                      value={profile.weightKg === 0 ? '' : profile.weightKg}
+                      onChange={(e) => setProfile({ ...profile, weightKg: parseNumberInput(e.target.value) })}
+                      placeholder="70"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500 font-mono"
                     />
                   </div>
                 </div>
 
-                {/* Heart Rate */}
-                <div className="p-3.5 bg-slate-800/60 rounded-xl border border-slate-700/80 flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-xs text-rose-400 font-semibold">
-                    <Heart className="w-4 h-4" />
-                    <span>FC Repos : {profile.hrRest} bpm | FC Max : {profile.hrMax} bpm</span>
+                {/* Heart Rate Calibration (FC Repos & FC Max EDITABLE) */}
+                <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 text-rose-400 font-semibold text-xs uppercase tracking-wider">
+                      <Heart className="w-4 h-4" />
+                      <span>Fréquence Cardiaque (Calibration Karvonen)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAutoCalcHR}
+                      className="text-xs text-cyan-400 hover:text-cyan-300 underline"
+                    >
+                      Estimer FC Max ({estimateMaxHR(profile.age || 30)} bpm)
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleAutoCalcHR}
-                    className="text-xs text-cyan-400 hover:text-cyan-300 underline"
-                  >
-                    Estimer FC Max ({estimateMaxHR(profile.age)} bpm)
-                  </button>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        FC au Repos (bpm au réveil)
+                      </label>
+                      <input
+                        type="number"
+                        value={profile.hrRest === 0 ? '' : profile.hrRest}
+                        onChange={(e) => setProfile({ ...profile, hrRest: parseNumberInput(e.target.value) })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500 font-mono"
+                        placeholder="54"
+                      />
+                      <span className="text-[10px] text-slate-400 mt-1 block">Fréquence cardiaque mesurée au repos allongé</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        FC Maximale (bpm)
+                      </label>
+                      <input
+                        type="number"
+                        value={profile.hrMax === 0 ? '' : profile.hrMax}
+                        onChange={(e) => setProfile({ ...profile, hrMax: parseNumberInput(e.target.value) })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500 font-mono"
+                        placeholder="186"
+                      />
+                      <span className="text-[10px] text-slate-400 mt-1 block">FC max observée lors d'un effort maximal</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -312,7 +371,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                         <>
                           <input
                             type="text"
-                            value={runHelperValue}
+                            value={runHelperValue || ''}
                             onChange={(e) => setRunHelperValue(e.target.value)}
                             placeholder="Ex: 50:00 ou 6:15"
                             className="w-24 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs font-mono text-center"
@@ -334,7 +393,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure EF (min/km)</label>
                       <input
                         type="text"
-                        value={profile.runMetrics.efPaceMinKm}
+                        value={profile.runMetrics.efPaceMinKm || ''}
                         onChange={(e) => setProfile({
                           ...profile,
                           runMetrics: { ...profile.runMetrics, efPaceMinKm: e.target.value }
@@ -349,7 +408,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure Seuil (min/km)</label>
                       <input
                         type="text"
-                        value={profile.runMetrics.thresholdPaceMinKm}
+                        value={profile.runMetrics.thresholdPaceMinKm || ''}
                         onChange={(e) => setProfile({
                           ...profile,
                           runMetrics: { ...profile.runMetrics, thresholdPaceMinKm: e.target.value }
@@ -364,7 +423,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure Marathon (min/km)</label>
                       <input
                         type="text"
-                        value={profile.runMetrics.marathonPaceMinKm}
+                        value={profile.runMetrics.marathonPaceMinKm || ''}
                         onChange={(e) => setProfile({
                           ...profile,
                           runMetrics: { ...profile.runMetrics, marathonPaceMinKm: e.target.value }
@@ -379,7 +438,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure VMA (min/km)</label>
                       <input
                         type="text"
-                        value={profile.runMetrics.vmaPaceMinKm}
+                        value={profile.runMetrics.vmaPaceMinKm || ''}
                         onChange={(e) => setProfile({
                           ...profile,
                           runMetrics: { ...profile.runMetrics, vmaPaceMinKm: e.target.value }
@@ -405,10 +464,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       <label className="block text-xs font-semibold text-slate-300 mb-1">Puissance FTP (Watts)</label>
                       <input
                         type="number"
-                        value={profile.bikeMetrics.ftpWatts}
+                        value={profile.bikeMetrics.ftpWatts === 0 ? '' : profile.bikeMetrics.ftpWatts}
                         onChange={(e) => setProfile({
                           ...profile,
-                          bikeMetrics: { ...profile.bikeMetrics, ftpWatts: parseInt(e.target.value, 10) || 180 }
+                          bikeMetrics: { ...profile.bikeMetrics, ftpWatts: parseNumberInput(e.target.value) }
                         })}
                         className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-amber-500 font-mono"
                         placeholder="210"
@@ -421,10 +480,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       <input
                         type="number"
                         step="0.5"
-                        value={profile.bikeMetrics.avgZ2SpeedKmh}
+                        value={profile.bikeMetrics.avgZ2SpeedKmh === 0 ? '' : profile.bikeMetrics.avgZ2SpeedKmh}
                         onChange={(e) => setProfile({
                           ...profile,
-                          bikeMetrics: { ...profile.bikeMetrics, avgZ2SpeedKmh: parseFloat(e.target.value) || 25 }
+                          bikeMetrics: { ...profile.bikeMetrics, avgZ2SpeedKmh: parseNumberInput(e.target.value) }
                         })}
                         className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-amber-500 font-mono"
                         placeholder="27.5"
@@ -447,7 +506,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       <label className="block text-xs font-semibold text-slate-300 mb-1">Allure Seuil CSS aux 100m (mm:ss)</label>
                       <input
                         type="text"
-                        value={profile.swimMetrics.cssPacePer100m}
+                        value={profile.swimMetrics.cssPacePer100m || ''}
                         onChange={(e) => setProfile({
                           ...profile,
                           swimMetrics: { ...profile.swimMetrics, cssPacePer100m: e.target.value }
@@ -479,7 +538,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             </div>
           )}
 
-          {/* STEP 3: Race Target & Distance Specific to Selected Sport */}
+          {/* STEP 3: Race Target & Distance */}
           {step === 3 && (
             <div className="space-y-6">
               <div className="border-l-2 border-amber-500 pl-3">
@@ -648,7 +707,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Nom de l'épreuve / Objectif</label>
                   <input
                     type="text"
-                    value={profile.raceObjective.raceName}
+                    value={profile.raceObjective.raceName || ''}
                     onChange={(e) => setProfile({
                       ...profile,
                       raceObjective: { ...profile.raceObjective, raceName: e.target.value }
@@ -662,7 +721,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Date de la Course</label>
                   <input
                     type="date"
-                    value={profile.raceObjective.raceDate}
+                    value={profile.raceObjective.raceDate || ''}
                     onChange={(e) => setProfile({
                       ...profile,
                       raceObjective: { ...profile.raceObjective, raceDate: e.target.value }
@@ -719,12 +778,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Volume max hebdo (Heures)</label>
                   <input
                     type="number"
-                    value={profile.availability.maxWeeklyHours}
+                    value={profile.availability.maxWeeklyHours === 0 ? '' : profile.availability.maxWeeklyHours}
                     onChange={(e) => setProfile({
                       ...profile,
-                      availability: { ...profile.availability, maxWeeklyHours: parseInt(e.target.value, 10) || 8 }
+                      availability: { ...profile.availability, maxWeeklyHours: parseNumberInput(e.target.value) }
                     })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500"
+                    placeholder="8"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500 font-mono"
                   />
                 </div>
 
@@ -794,9 +854,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/80 space-y-2">
                   <div className="text-xs font-bold text-emerald-400 flex items-center space-x-1.5">
                     <Gauge className="w-4 h-4" />
-                    <span>Allures de Calibration</span>
+                    <span>Allures & Cardio de Calibration</span>
                   </div>
                   <div className="text-xs space-y-1">
+                    <div className="text-slate-300">❤️ Cardio : <strong className="text-rose-400 font-mono">{profile.hrRest} bpm (Repos)</strong> / <strong className="text-rose-400 font-mono">{profile.hrMax} bpm (Max)</strong></div>
                     {(targetSport === 'run' || targetSport === 'triathlon') && (
                       <div className="text-slate-300">🏃 EF : <strong className="text-white font-mono">{profile.runMetrics.efPaceMinKm}/km</strong> | Seuil : <strong className="text-emerald-400 font-mono">{profile.runMetrics.thresholdPaceMinKm}/km</strong></div>
                     )}
