@@ -1,8 +1,15 @@
 export type SportType = 'swim' | 'bike' | 'run' | 'brick' | 'strength' | 'rest';
 
+export type TargetSport = 'triathlon' | 'run' | 'bike' | 'swim';
+
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 
-export type RaceDistance = 'xs' | 's' | 'm' | 'l' | 'xl';
+export type TriathlonDistance = 'xs' | 's' | 'm' | 'l' | 'xl';
+export type RunDistance = 'run_5k' | 'run_10k' | 'run_semi' | 'run_marathon' | 'run_trail';
+export type BikeDistance = 'bike_50k' | 'bike_90k' | 'bike_135k' | 'bike_century' | 'bike_200k';
+export type SwimDistance = 'swim_1500m' | 'swim_3k' | 'swim_5k';
+
+export type RaceDistance = TriathlonDistance | RunDistance | BikeDistance | SwimDistance;
 
 export type RaceGoal = 'finisher' | 'time' | 'podium';
 
@@ -21,7 +28,7 @@ export interface RunMetrics {
 
 export interface BikeMetrics {
   ftpWatts: number;             // Ex: 210
-  avgZ2SpeedKmh: number;        // Ex: 26.5
+  avgZ2SpeedKmh: number;        // Ex: 27.5
   hasPowerMeter: boolean;
 }
 
@@ -41,11 +48,13 @@ export interface AthleteProfile {
   heightCm: number;
   hrRest: number;
   hrMax: number;
+  targetSport: TargetSport;     // 'triathlon' | 'run' | 'bike' | 'swim'
   experienceLevel: ExperienceLevel;
   runMetrics: RunMetrics;
   bikeMetrics: BikeMetrics;
   swimMetrics: SwimMetrics;
   raceObjective: {
+    sport: TargetSport;
     distance: RaceDistance;
     raceName: string;
     raceDate: string; // YYYY-MM-DD
@@ -125,6 +134,7 @@ export interface TrainingPlan {
   id: string;
   athleteId: string;
   createdAt: string;
+  targetSport: TargetSport;
   raceDistance: RaceDistance;
   raceDate: string;
   totalWeeks: number;

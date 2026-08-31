@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Compass, Gauge, Heart, Activity, Flame, Shield, Clock, MapPin, Zap } from 'lucide-react';
-import { AthleteProfile, RaceDistance } from '../types/triathlon';
+import { AthleteProfile, RaceDistance, TargetSport } from '../types/triathlon';
 import { calculateAllZones } from '../utils/zonesCalculator';
 import { predictRaceTimes } from '../utils/racePredictor';
 
@@ -10,12 +10,21 @@ interface ZonesCenterProps {
 
 export const ZonesCenter: React.FC<ZonesCenterProps> = ({ profile }) => {
   const [sportTab, setSportTab] = useState<'run' | 'bike' | 'swim' | 'hr'>('run');
+  const [predictorCategory, setPredictorCategory] = useState<TargetSport>(profile.targetSport || 'triathlon');
   const [predictedDist, setPredictedDist] = useState<RaceDistance>(profile.raceObjective.distance || 'm');
 
   const zones = calculateAllZones(profile);
   const prediction = predictRaceTimes(profile, predictedDist);
 
   const wKg = profile.weightKg ? (profile.bikeMetrics.ftpWatts / profile.weightKg).toFixed(2) : '2.8';
+
+  const handleSwitchCategory = (cat: TargetSport) => {
+    setPredictorCategory(cat);
+    if (cat === 'run') setPredictedDist('run_marathon');
+    else if (cat === 'bike') setPredictedDist('bike_135k');
+    else if (cat === 'swim') setPredictedDist('swim_3k');
+    else setPredictedDist('m');
+  };
 
   return (
     <div className="space-y-6">
@@ -230,33 +239,109 @@ export const ZonesCenter: React.FC<ZonesCenterProps> = ({ profile }) => {
           )}
         </div>
 
-        {/* Right Col: Race Time Predictor */}
+        {/* Right Col: Universal Race Time Predictor */}
         <div className="space-y-4">
           <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-cyan-500/30 shadow-xl space-y-4">
             <div className="flex items-center space-x-2 text-cyan-400">
               <Zap className="w-4 h-4" />
-              <h3 className="text-sm font-bold text-white">Estimateur Chrono Triathlon</h3>
+              <h3 className="text-sm font-bold text-white">Estimateur Chrono Prédictif</h3>
             </div>
 
             <p className="text-xs text-slate-300">
-              Simulation du temps d'arrivée et des splits selon vos allures actuelles et l'économie d'effort :
+              Simulation du temps selon vos allures actuelles :
             </p>
 
-            {/* Distance buttons */}
-            <div className="grid grid-cols-5 gap-1">
-              {(['xs', 's', 'm', 'l', 'xl'] as RaceDistance[]).map((d) => (
+            {/* Category Selector */}
+            <div className="grid grid-cols-4 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px]">
+              {[
+                { id: 'triathlon', label: 'Triathlon' },
+                { id: 'run', label: 'Course' },
+                { id: 'bike', label: 'Vélo' },
+                { id: 'swim', label: 'Nage' },
+              ].map((c) => (
                 <button
-                  key={d}
-                  onClick={() => setPredictedDist(d)}
-                  className={`py-1.5 rounded-lg text-xs font-bold uppercase transition ${
-                    predictedDist === d
-                      ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30'
-                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  key={c.id}
+                  onClick={() => handleSwitchCategory(c.id as TargetSport)}
+                  className={`py-1 rounded-lg font-bold transition ${
+                    predictorCategory === c.id ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  {d}
+                  {c.label}
                 </button>
               ))}
+            </div>
+
+            {/* Distance buttons based on category */}
+            <div className="flex flex-wrap gap-1">
+              {predictorCategory === 'triathlon' && (
+                (['xs', 's', 'm', 'l', 'xl'] as RaceDistance[]).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setPredictedDist(d)}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold uppercase transition ${
+                      predictedDist === d ? 'bg-cyan-500 text-slate-950 shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    {d}
+                  </button>
+                ))
+              )}
+
+              {predictorCategory === 'run' && (
+                ([
+                  { id: 'run_5k', label: '5 KM' },
+                  { id: 'run_10k', label: '10 KM' },
+                  { id: 'run_semi', label: 'Semi (21k)' },
+                  { id: 'run_marathon', label: 'Marathon' },
+                ] as const).map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => setPredictedDist(d.id)}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition ${
+                      predictedDist === d.id ? 'bg-emerald-500 text-slate-950 shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))
+              )}
+
+              {predictorCategory === 'bike' && (
+                ([
+                  { id: 'bike_50k', label: '50 km' },
+                  { id: 'bike_90k', label: '90 km' },
+                  { id: 'bike_135k', label: '135 km (Pierre Lavoie)' },
+                  { id: 'bike_century', label: '160 km' },
+                ] as const).map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => setPredictedDist(d.id)}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition ${
+                      predictedDist === d.id ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))
+              )}
+
+              {predictorCategory === 'swim' && (
+                ([
+                  { id: 'swim_1500m', label: '1.5 km' },
+                  { id: 'swim_3k', label: '3.0 km' },
+                  { id: 'swim_5k', label: '5.0 km' },
+                ] as const).map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => setPredictedDist(d.id)}
+                    className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition ${
+                      predictedDist === d.id ? 'bg-cyan-500 text-slate-950 shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))
+              )}
             </div>
 
             {/* Prediction Card */}
@@ -268,43 +353,44 @@ export const ZonesCenter: React.FC<ZonesCenterProps> = ({ profile }) => {
                 </span>
               </div>
 
-              {/* Splits */}
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between text-slate-300">
-                  <span className="flex items-center space-x-1.5">
+              {/* Single sport details or Triathlon splits */}
+              {prediction.sportType !== 'triathlon' ? (
+                <div className="space-y-1 text-xs">
+                  <div className="flex items-center justify-between text-slate-300">
+                    <span>Distance :</span>
+                    <span className="font-mono font-bold text-white">{prediction.runDistance || prediction.bikeDistance || prediction.swimDistance}</span>
+                  </div>
+                  {prediction.avgPaceOrSpeed && (
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span>Rythme moyen :</span>
+                      <span className="font-mono font-bold text-cyan-300">{prediction.avgPaceOrSpeed}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-slate-300">
                     <span>🏊 Natation ({prediction.swimDistance})</span>
-                  </span>
-                  <span className="font-mono font-bold text-cyan-300">{prediction.swimTime}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                  <span>⚡ Transition 1 (T1)</span>
-                  <span className="font-mono">{prediction.t1Time}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-slate-300">
-                  <span className="flex items-center space-x-1.5">
+                    <span className="font-mono font-bold text-cyan-300">{prediction.swimTime}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                    <span>⚡ Transition 1 (T1)</span>
+                    <span className="font-mono">{prediction.t1Time}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-300">
                     <span>🚴 Vélo ({prediction.bikeDistance})</span>
-                  </span>
-                  <span className="font-mono font-bold text-amber-300">{prediction.bikeTime}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-slate-400 text-[11px]">
-                  <span>⚡ Transition 2 (T2)</span>
-                  <span className="font-mono">{prediction.t2Time}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-slate-300">
-                  <span className="flex items-center space-x-1.5">
+                    <span className="font-mono font-bold text-amber-300">{prediction.bikeTime}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                    <span>⚡ Transition 2 (T2)</span>
+                    <span className="font-mono">{prediction.t2Time}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-300">
                     <span>🏃 Course ({prediction.runDistance})</span>
-                  </span>
-                  <span className="font-mono font-bold text-emerald-300">{prediction.runTime}</span>
+                    <span className="font-mono font-bold text-emerald-300">{prediction.runTime}</span>
+                  </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-800/40 rounded-xl border border-slate-800 text-[11px] text-slate-400 leading-relaxed">
-              💡 <strong>Astuce Débutant</strong> : En triathlon, la gestion d'effort à vélo est le secret d'une bonne course à pied. Ne dépassez pas votre Z2/Z3 à vélo pour ne pas marcher sur la course !
+              )}
             </div>
           </div>
         </div>

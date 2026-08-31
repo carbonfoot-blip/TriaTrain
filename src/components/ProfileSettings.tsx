@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Save, User, Activity, Gauge, Flame, Download, Upload, RefreshCw } from 'lucide-react';
-import { AthleteProfile, RaceDistance, RaceGoal } from '../types/triathlon';
+import { X, Save, User, Activity, Gauge, Flame, Download, Upload, RefreshCw, Layers } from 'lucide-react';
+import { AthleteProfile, RaceDistance, RaceGoal, TargetSport } from '../types/triathlon';
 
 interface ProfileSettingsProps {
   isOpen: boolean;
@@ -19,6 +19,33 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
   const [profile, setProfile] = useState<AthleteProfile>(initialProfile);
   const [saveToast, setSaveToast] = useState<boolean>(false);
+
+  const handleSportChange = (sport: TargetSport) => {
+    let defaultDist: RaceDistance = 'm';
+    let defaultName = 'Triathlon Olympique M';
+
+    if (sport === 'run') {
+      defaultDist = 'run_marathon';
+      defaultName = 'Marathon (42.195 km)';
+    } else if (sport === 'bike') {
+      defaultDist = 'bike_135k';
+      defaultName = 'Défi Pierre Lavoie (135 km)';
+    } else if (sport === 'swim') {
+      defaultDist = 'swim_3k';
+      defaultName = 'Nage Eau Libre 3 000m';
+    }
+
+    setProfile({
+      ...profile,
+      targetSport: sport,
+      raceObjective: {
+        ...profile.raceObjective,
+        sport,
+        distance: defaultDist,
+        raceName: defaultName,
+      },
+    });
+  };
 
   const handleSave = () => {
     onSaveProfile(profile);
@@ -67,7 +94,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-white">Paramètres du Profil & Allures</h3>
-              <p className="text-xs text-slate-400">Ajustez vos repères : le programme s'adaptera instantanément</p>
+              <p className="text-xs text-slate-400">Ajustez votre sport cible, vos allures ou chargez une sauvegarde</p>
             </div>
           </div>
 
@@ -81,6 +108,96 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
         {/* Content */}
         <div className="p-6 max-h-[65vh] overflow-y-auto space-y-6">
+          {/* Target Sport & Goal Switcher */}
+          <div className="space-y-3 p-4 bg-slate-950/60 rounded-xl border border-slate-800">
+            <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center space-x-1.5">
+              <Layers className="w-4 h-4" />
+              <span>Discipline Cible & Distance</span>
+            </h4>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { id: 'triathlon', label: '🏊🚴🏃 Triathlon' },
+                { id: 'run', label: '🏃 Course à pied' },
+                { id: 'bike', label: '🚴 Cyclisme' },
+                { id: 'swim', label: '🏊 Natation' },
+              ].map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => handleSportChange(s.id as TargetSport)}
+                  className={`py-2 px-2.5 rounded-lg text-xs font-bold transition text-center ${
+                    profile.targetSport === s.id
+                      ? 'bg-cyan-500 text-slate-950 shadow-md font-extrabold'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Format de course</label>
+                <select
+                  value={profile.raceObjective.distance}
+                  onChange={(e) => setProfile({
+                    ...profile,
+                    raceObjective: { ...profile.raceObjective, distance: e.target.value as RaceDistance }
+                  })}
+                  className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-xs font-medium"
+                >
+                  {profile.targetSport === 'run' ? (
+                    <>
+                      <option value="run_5k">5 KM</option>
+                      <option value="run_10k">10 KM</option>
+                      <option value="run_semi">Semi-Marathon (21.1 km)</option>
+                      <option value="run_marathon">Marathon (42.195 km)</option>
+                      <option value="run_trail">Trail & Dénivelé (~30 km)</option>
+                    </>
+                  ) : profile.targetSport === 'bike' ? (
+                    <>
+                      <option value="bike_50k">50 KM (Rythmée)</option>
+                      <option value="bike_90k">90 KM (Gran Fondo)</option>
+                      <option value="bike_135k">135 KM (Défi Pierre Lavoie)</option>
+                      <option value="bike_century">160 KM (100 Miles / Century)</option>
+                      <option value="bike_200k">200 KM+ (Ultra-Cyclisme)</option>
+                    </>
+                  ) : profile.targetSport === 'swim' ? (
+                    <>
+                      <option value="swim_1500m">1 500 M Eau Libre</option>
+                      <option value="swim_3k">3 000 M (3 KM)</option>
+                      <option value="swim_5k">5 000 M (5 KM)</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="xs">Triathlon XS (Découverte)</option>
+                      <option value="s">Triathlon S (Sprint)</option>
+                      <option value="m">Triathlon M (Olympique)</option>
+                      <option value="l">Triathlon L (Half 70.3)</option>
+                      <option value="xl">Triathlon XL (Ironman 140.6)</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Nom de l'épreuve</label>
+                <input
+                  type="text"
+                  value={profile.raceObjective.raceName}
+                  onChange={(e) => setProfile({
+                    ...profile,
+                    raceObjective: { ...profile.raceObjective, raceName: e.target.value }
+                  })}
+                  className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-xs"
+                  placeholder="Ex: Marathon de Paris ou Défi Pierre Lavoie"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Athlete Info */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Identité & Biométrie</h4>
@@ -267,7 +384,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             className="flex items-center space-x-1.5 px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-cyan-600/30 transition"
           >
             <Save className="w-4 h-4" />
-            <span>{saveToast ? 'Sauvegardé !' : 'Appliquer les allures au plan'}</span>
+            <span>{saveToast ? 'Sauvegardé !' : 'Appliquer et recalculer le plan'}</span>
           </button>
         </div>
       </div>

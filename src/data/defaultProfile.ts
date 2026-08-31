@@ -2,13 +2,14 @@ import { AthleteProfile } from '../types/triathlon';
 
 export const DEFAULT_ATHLETE_PROFILE: AthleteProfile = {
   id: 'athlete-1',
-  name: 'Alexandre (Triathlète Débutant)',
+  name: 'Alexandre (Sportif Polyvalent)',
   gender: 'male',
   age: 32,
   weightKg: 74,
   heightCm: 178,
   hrRest: 54,
   hrMax: 186,
+  targetSport: 'triathlon',
   experienceLevel: 'beginner',
   runMetrics: {
     efPaceMinKm: '6:15',
@@ -30,6 +31,7 @@ export const DEFAULT_ATHLETE_PROFILE: AthleteProfile = {
     comfortLevel: 'beginner',
   },
   raceObjective: {
+    sport: 'triathlon',
     distance: 'm',
     raceName: 'Triathlon International Olympique (Distance M)',
     raceDate: new Date(Date.now() + 12 * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 12 weeks ahead

@@ -41,10 +41,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   TriaTrain
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/50">
-                  {profile.raceObjective.distance.toUpperCase()}
+                  {profile.targetSport === 'run' ? '🏃 COURSE' : profile.targetSport === 'bike' ? '🚴 VÉLO' : profile.targetSport === 'swim' ? '🏊 NATATION' : '🏊🚴🏃 TRIATHLON'} • {profile.raceObjective.distance.replace('run_', '').replace('bike_', '').replace('swim_', '').toUpperCase()}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">Coach & Programme Triathlon Personnalisé</p>
+              <p className="text-[11px] text-slate-400 hidden sm:block">Coach & Plans d'Entraînement Scientifiques (Triathlon, Marathon, Cyclisme)</p>
             </div>
           </div>
 

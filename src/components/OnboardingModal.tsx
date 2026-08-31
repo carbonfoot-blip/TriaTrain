@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { 
   X, Check, Sparkles, ChevronRight, ChevronLeft, 
   Activity, Heart, Flame, Shield, Award, Calendar, 
-  Clock, Gauge, Zap, HelpCircle, Dumbbell
+  Clock, Gauge, Zap, HelpCircle, Dumbbell, Compass
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { AthleteProfile, RaceDistance, RaceGoal, ExperienceLevel } from '../types/triathlon';
+import { AthleteProfile, RaceDistance, RaceGoal, ExperienceLevel, TargetSport } from '../types/triathlon';
 import { estimateMaxHR, extrapolateRunPaces } from '../utils/zonesCalculator';
 
 interface OnboardingModalProps {
@@ -24,11 +24,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const [step, setStep] = useState<number>(1);
   const [profile, setProfile] = useState<AthleteProfile>(currentProfile);
 
-  // Magic calculation helper state for run paces
+  // Helper for run paces
   const [runHelperType, setRunHelperType] = useState<'manual' | '10k' | '5k' | 'ef'>('manual');
   const [runHelperValue, setRunHelperValue] = useState<string>('50:00');
 
   if (!isOpen) return null;
+
+  const targetSport = profile.targetSport || 'triathlon';
 
   const handleApplyRunHelper = () => {
     if (runHelperType === 'manual') return;
@@ -55,6 +57,33 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     });
   };
 
+  const setSportMode = (sport: TargetSport) => {
+    let defaultDist: RaceDistance = 'm';
+    let defaultName = 'Triathlon Olympique M';
+
+    if (sport === 'run') {
+      defaultDist = 'run_marathon';
+      defaultName = 'Marathon (42.195 km)';
+    } else if (sport === 'bike') {
+      defaultDist = 'bike_135k';
+      defaultName = 'Défi Pierre Lavoie (135 km)';
+    } else if (sport === 'swim') {
+      defaultDist = 'swim_3k';
+      defaultName = 'Épreuve Eau Libre 3 000m';
+    }
+
+    setProfile({
+      ...profile,
+      targetSport: sport,
+      raceObjective: {
+        ...profile.raceObjective,
+        sport,
+        distance: defaultDist,
+        raceName: defaultName,
+      },
+    });
+  };
+
   const toggleDayAvailability = (day: number) => {
     const current = profile.availability.availableDays;
     let next: number[];
@@ -62,7 +91,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       if (current.length > 2) {
         next = current.filter((d) => d !== day);
       } else {
-        next = current; // Keep at least 2 days
+        next = current;
       }
     } else {
       next = [...current, day].sort();
@@ -89,7 +118,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
       <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden my-8">
-        {/* Header with Step indicator */}
+        {/* Header */}
         <div className="p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-700/70">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -97,8 +126,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white tracking-tight">Configuration de votre Profil & Allures</h2>
-                <p className="text-xs text-slate-400">Programme de triathlon personnalisé et calibré sur vos zones physiologiques</p>
+                <h2 className="text-xl font-bold text-white tracking-tight">Configuration de votre Programme Personnalisé</h2>
+                <p className="text-xs text-slate-400">Triathlon, Marathon, Semi, 10KM ou Défi Cyclisme (ex: Défi Pierre Lavoie 135 km)</p>
               </div>
             </div>
             <button
@@ -112,7 +141,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {/* Stepper Dots */}
           <div className="grid grid-cols-5 gap-2 mt-6">
             {[
-              { num: 1, label: 'Biométrie' },
+              { num: 1, label: 'Sport & Profil' },
               { num: 2, label: 'Allures & Chronos' },
               { num: 3, label: 'Objectif Course' },
               { num: 4, label: 'Disponibilités' },
@@ -140,419 +169,483 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
         {/* Step Content */}
         <div className="p-6 max-h-[68vh] overflow-y-auto space-y-6">
-          {/* STEP 1: Biometrics & Profile */}
+          {/* STEP 1: Discipline selection & Biometrics */}
           {step === 1 && (
-            <div className="space-y-5">
-              <div className="border-l-2 border-cyan-500 pl-3">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Étape 1 : Identité & Physiologie Cardiaque</h3>
-                <p className="text-xs text-slate-400">Ces métriques permettent d'estimer vos zones de fréquence cardiaque et vos dépenses énergétiques.</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Votre Prénom ou Nom d'athlète</label>
-                  <input
-                    type="text"
-                    value={profile.name}
-                    onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                    placeholder="Ex: Thomas"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Genre</label>
-                  <select
-                    value={profile.gender}
-                    onChange={(e) => setProfile({ ...profile, gender: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                  >
-                    <option value="male">Homme</option>
-                    <option value="female">Femme</option>
-                    <option value="other">Autre</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Âge</label>
-                  <input
-                    type="number"
-                    value={profile.age}
-                    onChange={(e) => setProfile({ ...profile, age: parseInt(e.target.value, 10) || 30 })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Niveau d'expérience globale</label>
-                  <select
-                    value={profile.experienceLevel}
-                    onChange={(e) => setProfile({ ...profile, experienceLevel: e.target.value as ExperienceLevel })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                  >
-                    <option value="beginner">Débutant (1er ou 2ème triathlon)</option>
-                    <option value="intermediate">Intermédiaire (Déjà réalisé plusieurs triathlons)</option>
-                    <option value="advanced">Confirmé / Compétiteur régulier</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Poids (kg)</label>
-                  <input
-                    type="number"
-                    value={profile.weightKg}
-                    onChange={(e) => setProfile({ ...profile, weightKg: parseFloat(e.target.value) || 70 })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Taille (cm)</label>
-                  <input
-                    type="number"
-                    value={profile.heightCm}
-                    onChange={(e) => setProfile({ ...profile, heightCm: parseInt(e.target.value, 10) || 175 })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                  />
+            <div className="space-y-6">
+              {/* Main Sport Picker */}
+              <div className="space-y-2.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                  1. Choisissez votre Discipline Principale
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {[
+                    { id: 'triathlon', label: 'Triathlon Complet', emoji: '🏊🚴🏃', desc: 'XS, Sprint, M, 70.3, 140.6', color: 'border-cyan-500 bg-cyan-950/40 text-cyan-300' },
+                    { id: 'run', label: 'Course à Pied Seule', emoji: '🏃', desc: 'Marathon, Semi, 10K, 5K', color: 'border-emerald-500 bg-emerald-950/40 text-emerald-300' },
+                    { id: 'bike', label: 'Cyclisme Seul', emoji: '🚴', desc: '135 km Défi Pierre Lavoie, Gran Fondo', color: 'border-amber-500 bg-amber-950/40 text-amber-300' },
+                    { id: 'swim', label: 'Natation Seule', emoji: '🏊', desc: 'Eau Libre 1500m, 3km, 5km', color: 'border-blue-500 bg-blue-950/40 text-blue-300' },
+                  ].map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSportMode(s.id as TargetSport)}
+                      className={`p-3 rounded-xl border text-left transition flex flex-col justify-between ${
+                        targetSport === s.id
+                          ? `${s.color} ring-2 ring-cyan-400/50 shadow-lg`
+                          : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="text-xl mb-1">{s.emoji}</div>
+                      <div className="text-xs font-bold text-white leading-tight">{s.label}</div>
+                      <div className="text-[10px] text-slate-400 mt-1 leading-tight">{s.desc}</div>
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Heart Rate Calibration */}
-              <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/80 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-rose-400 font-semibold text-sm">
+              {/* Biometrics */}
+              <div className="border-t border-slate-800 pt-4 space-y-4">
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">2. Données Physiologiques</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Votre Prénom ou Nom d'athlète</label>
+                    <input
+                      type="text"
+                      value={profile.name}
+                      onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                      placeholder="Ex: Alexandre"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Niveau d'expérience</label>
+                    <select
+                      value={profile.experienceLevel}
+                      onChange={(e) => setProfile({ ...profile, experienceLevel: e.target.value as ExperienceLevel })}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="beginner">Débutant (1ère ou 2ème préparation)</option>
+                      <option value="intermediate">Intermédiaire (Déjà plusieurs courses terminées)</option>
+                      <option value="advanced">Confirmé / Recherche de performance</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Âge</label>
+                    <input
+                      type="number"
+                      value={profile.age}
+                      onChange={(e) => setProfile({ ...profile, age: parseInt(e.target.value, 10) || 30 })}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Poids (kg)</label>
+                    <input
+                      type="number"
+                      value={profile.weightKg}
+                      onChange={(e) => setProfile({ ...profile, weightKg: parseFloat(e.target.value) || 70 })}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Heart Rate */}
+                <div className="p-3.5 bg-slate-800/60 rounded-xl border border-slate-700/80 flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-xs text-rose-400 font-semibold">
                     <Heart className="w-4 h-4" />
-                    <span>Fréquence Cardiaque (Calibration Karvonen)</span>
+                    <span>FC Repos : {profile.hrRest} bpm | FC Max : {profile.hrMax} bpm</span>
                   </div>
                   <button
                     type="button"
                     onClick={handleAutoCalcHR}
                     className="text-xs text-cyan-400 hover:text-cyan-300 underline"
                   >
-                    Estimer FC Max via l'âge ({estimateMaxHR(profile.age)} bpm)
+                    Estimer FC Max ({estimateMaxHR(profile.age)} bpm)
                   </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">FC Repos au réveil (bpm)</label>
-                    <input
-                      type="number"
-                      value={profile.hrRest}
-                      onChange={(e) => setProfile({ ...profile, hrRest: parseInt(e.target.value, 10) || 55 })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                      placeholder="Ex: 52"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">FC Maximale observée (bpm)</label>
-                    <input
-                      type="number"
-                      value={profile.hrMax}
-                      onChange={(e) => setProfile({ ...profile, hrMax: parseInt(e.target.value, 10) || 185 })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                      placeholder="Ex: 188"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* STEP 2: Paces & Benchmarks (Run, Bike, Swim) */}
+          {/* STEP 2: Current Paces & Metrics */}
           {step === 2 && (
             <div className="space-y-6">
               <div className="border-l-2 border-emerald-500 pl-3">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Étape 2 : Vos Allures Actuelles de Référence</h3>
-                <p className="text-xs text-slate-400">Entrez vos allures habituelles. Si vous êtes débutant, utilisez l'assistant de calcul automatique.</p>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Étape 2 : Vos Allures et Repères Actuels
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {targetSport === 'run' && 'Calibrez vos allures clés de course à pied (EF, Seuil, Marathon, VMA).'}
+                  {targetSport === 'bike' && 'Calibrez votre puissance FTP ou votre vitesse moyenne d\'endurance à vélo.'}
+                  {targetSport === 'swim' && 'Calibrez votre allure CSS (Critical Swim Speed) aux 100m.'}
+                  {targetSport === 'triathlon' && 'Calibrez vos allures de référence pour les 3 disciplines.'}
+                </p>
               </div>
 
-              {/* 1. RUNNING SECTION */}
-              <div className="p-4 bg-slate-800/50 rounded-xl border border-emerald-500/20 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center space-x-2 text-emerald-400 font-bold text-sm">
-                    <span>🏃 Course à Pied</span>
-                  </span>
-                </div>
-
-                {/* Wizard helper */}
-                <div className="p-3 bg-slate-900/80 rounded-lg border border-slate-700 text-xs space-y-2">
+              {/* RUNNING SECTION (Visible for Run & Triathlon) */}
+              {(targetSport === 'run' || targetSport === 'triathlon') && (
+                <div className="p-4 bg-slate-800/50 rounded-xl border border-emerald-500/20 space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-300">💡 Assistant débutant : déduire mes allures depuis un chrono</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={runHelperType}
-                      onChange={(e) => setRunHelperType(e.target.value as any)}
-                      className="px-2.5 py-1.5 bg-slate-800 border border-slate-600 rounded text-slate-200 text-xs"
-                    >
-                      <option value="manual">Saisie manuelle directe</option>
-                      <option value="10k">Depuis mon temps sur 10 km (mm:ss)</option>
-                      <option value="5k">Depuis mon temps sur 5 km (mm:ss)</option>
-                      <option value="ef">Depuis mon allure cool en footing (min/km)</option>
-                    </select>
-
-                    {runHelperType !== 'manual' && (
-                      <>
-                        <input
-                          type="text"
-                          value={runHelperValue}
-                          onChange={(e) => setRunHelperValue(e.target.value)}
-                          placeholder="Ex: 50:00 ou 6:15"
-                          className="w-24 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleApplyRunHelper}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold text-xs transition"
-                        >
-                          Calculer automatiquement
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure EF / Z2 (min/km)</label>
-                    <input
-                      type="text"
-                      value={profile.runMetrics.efPaceMinKm}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        runMetrics: { ...profile.runMetrics, efPaceMinKm: e.target.value }
-                      })}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-sm text-center font-mono focus:border-emerald-500"
-                      placeholder="6:15"
-                    />
-                    <span className="text-[10px] text-slate-500 block text-center mt-0.5">Aisance totale</span>
+                    <span className="flex items-center space-x-2 text-emerald-400 font-bold text-sm">
+                      <span>🏃 Course à Pied</span>
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure Seuil (min/km)</label>
-                    <input
-                      type="text"
-                      value={profile.runMetrics.thresholdPaceMinKm}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        runMetrics: { ...profile.runMetrics, thresholdPaceMinKm: e.target.value }
-                      })}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-sm text-center font-mono focus:border-emerald-500"
-                      placeholder="4:50"
-                    />
-                    <span className="text-[10px] text-slate-500 block text-center mt-0.5">Allure 10 km</span>
+                  {/* Wizard helper */}
+                  <div className="p-3 bg-slate-900/80 rounded-lg border border-slate-700 text-xs space-y-2">
+                    <span className="font-semibold text-slate-300">💡 Assistant : déduire mes allures depuis un chrono</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={runHelperType}
+                        onChange={(e) => setRunHelperType(e.target.value as any)}
+                        className="px-2.5 py-1.5 bg-slate-800 border border-slate-600 rounded text-slate-200 text-xs"
+                      >
+                        <option value="manual">Saisie manuelle directe</option>
+                        <option value="10k">Depuis mon temps sur 10 km (mm:ss)</option>
+                        <option value="5k">Depuis mon temps sur 5 km (mm:ss)</option>
+                        <option value="ef">Depuis mon allure cool en footing (min/km)</option>
+                      </select>
+
+                      {runHelperType !== 'manual' && (
+                        <>
+                          <input
+                            type="text"
+                            value={runHelperValue}
+                            onChange={(e) => setRunHelperValue(e.target.value)}
+                            placeholder="Ex: 50:00 ou 6:15"
+                            className="w-24 px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs font-mono text-center"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleApplyRunHelper}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold text-xs transition"
+                          >
+                            Calculer
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure Marathon (min/km)</label>
-                    <input
-                      type="text"
-                      value={profile.runMetrics.marathonPaceMinKm}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        runMetrics: { ...profile.runMetrics, marathonPaceMinKm: e.target.value }
-                      })}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-sm text-center font-mono focus:border-emerald-500"
-                      placeholder="5:25"
-                    />
-                    <span className="text-[10px] text-slate-500 block text-center mt-0.5">Allure Z3 Tempo</span>
-                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure EF (min/km)</label>
+                      <input
+                        type="text"
+                        value={profile.runMetrics.efPaceMinKm}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          runMetrics: { ...profile.runMetrics, efPaceMinKm: e.target.value }
+                        })}
+                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-sm text-center font-mono focus:border-emerald-500"
+                        placeholder="6:15"
+                      />
+                      <span className="text-[10px] text-slate-500 block text-center mt-0.5">Aisance totale (Z2)</span>
+                    </div>
 
-                  <div>
-                    <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure VMA / 5k (min/km)</label>
-                    <input
-                      type="text"
-                      value={profile.runMetrics.vmaPaceMinKm}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        runMetrics: { ...profile.runMetrics, vmaPaceMinKm: e.target.value }
-                      })}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-sm text-center font-mono focus:border-emerald-500"
-                      placeholder="4:15"
-                    />
-                    <span className="text-[10px] text-slate-500 block text-center mt-0.5">Intervalles courts</span>
-                  </div>
-                </div>
-              </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure Seuil (min/km)</label>
+                      <input
+                        type="text"
+                        value={profile.runMetrics.thresholdPaceMinKm}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          runMetrics: { ...profile.runMetrics, thresholdPaceMinKm: e.target.value }
+                        })}
+                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-sm text-center font-mono focus:border-emerald-500"
+                        placeholder="4:50"
+                      />
+                      <span className="text-[10px] text-slate-500 block text-center mt-0.5">Allure 10 km (Z4)</span>
+                    </div>
 
-              {/* 2. CYCLING SECTION */}
-              <div className="p-4 bg-slate-800/50 rounded-xl border border-amber-500/20 space-y-4">
-                <span className="flex items-center space-x-2 text-amber-400 font-bold text-sm">
-                  <span>🚴 Cyclisme</span>
-                </span>
+                    <div>
+                      <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure Marathon (min/km)</label>
+                      <input
+                        type="text"
+                        value={profile.runMetrics.marathonPaceMinKm}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          runMetrics: { ...profile.runMetrics, marathonPaceMinKm: e.target.value }
+                        })}
+                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-sm text-center font-mono focus:border-emerald-500"
+                        placeholder="5:25"
+                      />
+                      <span className="text-[10px] text-slate-500 block text-center mt-0.5">Allure Tempo (Z3)</span>
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Puissance FTP (Watts)</label>
-                    <input
-                      type="number"
-                      value={profile.bikeMetrics.ftpWatts}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        bikeMetrics: { ...profile.bikeMetrics, ftpWatts: parseInt(e.target.value, 10) || 180 }
-                      })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-amber-500"
-                      placeholder="210"
-                    />
-                    <span className="text-[11px] text-slate-400 mt-1 block">Puissance max tenable 1 heure (env. {((profile.bikeMetrics.ftpWatts || 200) / (profile.weightKg || 70)).toFixed(2)} W/kg)</span>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Vitesse moyenne sur le plat en Z2 (km/h)</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={profile.bikeMetrics.avgZ2SpeedKmh}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        bikeMetrics: { ...profile.bikeMetrics, avgZ2SpeedKmh: parseFloat(e.target.value) || 25 }
-                      })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-amber-500"
-                      placeholder="26.5"
-                    />
-                    <span className="text-[11px] text-slate-400 mt-1 block">Vitesse en endurance sans vent défavorable</span>
+                    <div>
+                      <label className="block text-[11px] text-slate-300 font-medium mb-1">Allure VMA (min/km)</label>
+                      <input
+                        type="text"
+                        value={profile.runMetrics.vmaPaceMinKm}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          runMetrics: { ...profile.runMetrics, vmaPaceMinKm: e.target.value }
+                        })}
+                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-sm text-center font-mono focus:border-emerald-500"
+                        placeholder="4:15"
+                      />
+                      <span className="text-[10px] text-slate-500 block text-center mt-0.5">Intervalles 30/30 (Z5)</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* 3. SWIMMING SECTION */}
-              <div className="p-4 bg-slate-800/50 rounded-xl border border-cyan-500/20 space-y-4">
-                <span className="flex items-center space-x-2 text-cyan-400 font-bold text-sm">
-                  <span>🏊 Natation (Crawl)</span>
-                </span>
+              {/* CYCLING SECTION (Visible for Bike & Triathlon) */}
+              {(targetSport === 'bike' || targetSport === 'triathlon') && (
+                <div className="p-4 bg-slate-800/50 rounded-xl border border-amber-500/20 space-y-4">
+                  <span className="flex items-center space-x-2 text-amber-400 font-bold text-sm">
+                    <span>🚴 Cyclisme (Watts & Vitesse)</span>
+                  </span>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Allure Seuil CSS aux 100m (mm:ss)</label>
-                    <input
-                      type="text"
-                      value={profile.swimMetrics.cssPacePer100m}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        swimMetrics: { ...profile.swimMetrics, cssPacePer100m: e.target.value }
-                      })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm font-mono focus:border-cyan-500"
-                      placeholder="2:00"
-                    />
-                    <span className="text-[11px] text-slate-400 mt-1 block">Critical Swim Speed (Allure tenue sur un 400m)</span>
-                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Puissance FTP (Watts)</label>
+                      <input
+                        type="number"
+                        value={profile.bikeMetrics.ftpWatts}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          bikeMetrics: { ...profile.bikeMetrics, ftpWatts: parseInt(e.target.value, 10) || 180 }
+                        })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-amber-500 font-mono"
+                        placeholder="210"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">Puissance max 1 heure (env. {((profile.bikeMetrics.ftpWatts || 200) / (profile.weightKg || 70)).toFixed(2)} W/kg)</span>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1">Aisance respiratoire en crawl</label>
-                    <select
-                      value={profile.swimMetrics.comfortLevel}
-                      onChange={(e) => setProfile({
-                        ...profile,
-                        swimMetrics: { ...profile.swimMetrics, comfortLevel: e.target.value as any }
-                      })}
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500"
-                    >
-                      <option value="beginner">Débutant (Difficulté à nager 100m crawl sans pause)</option>
-                      <option value="intermediate">Intermédiaire (Capable de nager 1000m continu en crawl)</option>
-                      <option value="advanced">Confirmé (Nageur régulier, respiration 3 temps fluide)</option>
-                    </select>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Vitesse moyenne endurance Z2 sur le plat (km/h)</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={profile.bikeMetrics.avgZ2SpeedKmh}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          bikeMetrics: { ...profile.bikeMetrics, avgZ2SpeedKmh: parseFloat(e.target.value) || 25 }
+                        })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-amber-500 font-mono"
+                        placeholder="27.5"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">Vitesse confortable sur le plat</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* SWIMMING SECTION (Visible for Swim & Triathlon) */}
+              {(targetSport === 'swim' || targetSport === 'triathlon') && (
+                <div className="p-4 bg-slate-800/50 rounded-xl border border-cyan-500/20 space-y-4">
+                  <span className="flex items-center space-x-2 text-cyan-400 font-bold text-sm">
+                    <span>🏊 Natation (Crawl)</span>
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Allure Seuil CSS aux 100m (mm:ss)</label>
+                      <input
+                        type="text"
+                        value={profile.swimMetrics.cssPacePer100m}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          swimMetrics: { ...profile.swimMetrics, cssPacePer100m: e.target.value }
+                        })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm font-mono focus:border-cyan-500 text-center"
+                        placeholder="2:00"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">Critical Swim Speed (Allure 400m)</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Aisance respiratoire en crawl</label>
+                      <select
+                        value={profile.swimMetrics.comfortLevel}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          swimMetrics: { ...profile.swimMetrics, comfortLevel: e.target.value as any }
+                        })}
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500"
+                      >
+                        <option value="beginner">Débutant (Pauses régulières)</option>
+                        <option value="intermediate">Intermédiaire (1000m crawl continu)</option>
+                        <option value="advanced">Confirmé (Respiration 3 temps fluide)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {/* STEP 3: Race Target & Distance */}
+          {/* STEP 3: Race Target & Distance Specific to Selected Sport */}
           {step === 3 && (
             <div className="space-y-6">
               <div className="border-l-2 border-amber-500 pl-3">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Étape 3 : Objectif de Triathlon & Format de Course</h3>
-                <p className="text-xs text-slate-400">Sélectionnez la distance préparée pour adapter les volumes hebdomadaires et les séances briques.</p>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Étape 3 : Format & Distance de votre Objectif
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Choisissez la distance exacte pour calibrer les volumes hebdomadaires et les sorties clés.
+                </p>
               </div>
 
-              {/* Distance cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {[
-                  {
-                    id: 'xs',
-                    name: 'Triathlon XS',
-                    tag: 'Découverte',
-                    swim: '400 m',
-                    bike: '10 km',
-                    run: '2.5 km',
-                    desc: 'Idéal pour un tout premier baptême sans stress.',
-                  },
-                  {
-                    id: 's',
-                    name: 'Triathlon S',
-                    tag: 'Sprint',
-                    swim: '750 m',
-                    bike: '20 km',
-                    run: '5 km',
-                    desc: 'Dynamique, accessible et parfait pour débuter avec panache.',
-                  },
-                  {
-                    id: 'm',
-                    name: 'Triathlon M',
-                    tag: 'Olympique (Standard)',
-                    swim: '1 500 m',
-                    bike: '40 km',
-                    run: '10 km',
-                    desc: 'La distance reine internationale, le premier vrai grand défi.',
-                  },
-                  {
-                    id: 'l',
-                    name: 'Triathlon L',
-                    tag: 'Half 70.3',
-                    swim: '1 900 m',
-                    bike: '90 km',
-                    run: '21.1 km',
-                    desc: 'Endurance longue distance, gestion nutritionnelle clé.',
-                  },
-                  {
-                    id: 'xl',
-                    name: 'Triathlon XL',
-                    tag: 'Ironman 140.6',
-                    swim: '3 800 m',
-                    bike: '180 km',
-                    run: '42.2 km',
-                    desc: 'Le mythe ultime de l\'ultra-endurance.',
-                  },
-                ].map((d) => {
-                  const isSelected = profile.raceObjective.distance === d.id;
-                  return (
-                    <div
-                      key={d.id}
-                      onClick={() => setProfile({
-                        ...profile,
-                        raceObjective: { ...profile.raceObjective, distance: d.id as RaceDistance }
-                      })}
-                      className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
-                        isSelected
-                          ? 'bg-gradient-to-b from-amber-500/20 to-slate-900 border-amber-400 shadow-lg shadow-amber-500/10'
-                          : 'bg-slate-800/40 border-slate-700/70 hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="font-bold text-sm text-white">{d.name}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase ${
-                          isSelected ? 'bg-amber-400 text-slate-950' : 'bg-slate-700 text-slate-300'
-                        }`}>
-                          {d.tag}
-                        </span>
+              {/* 1. RUNNING FORMATS */}
+              {targetSport === 'run' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { id: 'run_5k', name: '5 KM', tag: 'Vitesse & Débutant', dist: '5.0 km', desc: 'Idéal pour développer le dynamisme et la VMA.' },
+                    { id: 'run_10k', name: '10 KM', tag: 'Classique Seuil', dist: '10.0 km', desc: 'La distance universelle de référence pour travailler le seuil.' },
+                    { id: 'run_semi', name: 'Semi-Marathon', tag: '21.1 KM', dist: '21.1 km', desc: 'L\'équilibre parfait entre endurance et vitesse soutenue.' },
+                    { id: 'run_marathon', name: 'Marathon', tag: '42.195 KM', dist: '42.2 km', desc: 'Le grand défi mythique. Gestion d\'allure et du mur du 30ème km.' },
+                    { id: 'run_trail', name: 'Trail & Nature', tag: 'Dénivelé', dist: '~30 km', desc: 'Course nature, travail en côtes et renforcement articulaire.' },
+                  ].map((d) => {
+                    const isSelected = profile.raceObjective.distance === d.id;
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => setProfile({
+                          ...profile,
+                          raceObjective: { ...profile.raceObjective, distance: d.id as RaceDistance, raceName: d.name }
+                        })}
+                        className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+                          isSelected
+                            ? 'bg-gradient-to-b from-emerald-500/20 to-slate-900 border-emerald-400 shadow-lg shadow-emerald-500/10'
+                            : 'bg-slate-800/40 border-slate-700/70 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-sm text-white">🏃 {d.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase bg-emerald-950 text-emerald-300 border border-emerald-800">
+                            {d.tag}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">{d.desc}</p>
                       </div>
-                      <div className="flex items-center space-x-2 text-[11px] text-slate-300 font-mono mb-2">
-                        <span>🏊 {d.swim}</span>
-                        <span>🚴 {d.bike}</span>
-                        <span>🏃 {d.run}</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-snug">{d.desc}</p>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
 
-              {/* Race details */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              {/* 2. CYCLING FORMATS */}
+              {targetSport === 'bike' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { id: 'bike_50k', name: '50 KM', tag: 'Rythmée', desc: 'Sortie rapide et rythmée, travail de cadence.' },
+                    { id: 'bike_90k', name: '90 KM Gran Fondo', tag: 'Endurance', desc: 'Distance classique de cyclosportive intermédiaire.' },
+                    { id: 'bike_135k', name: 'Défi 135 KM', tag: 'Défi Pierre Lavoie', desc: 'La distance emblématique de la Boucle Pierre Lavoie et des grandes cyclos.' },
+                    { id: 'bike_century', name: '160 KM (100 Miles)', tag: 'Century Ride', desc: 'Le cap mythique des 100 miles en cyclisme.' },
+                    { id: 'bike_200k', name: '200 KM+', tag: 'Ultra-Cyclisme', desc: 'Brevet des Randonneurs et ultra-distance.' },
+                  ].map((d) => {
+                    const isSelected = profile.raceObjective.distance === d.id;
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => setProfile({
+                          ...profile,
+                          raceObjective: { ...profile.raceObjective, distance: d.id as RaceDistance, raceName: d.name }
+                        })}
+                        className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+                          isSelected
+                            ? 'bg-gradient-to-b from-amber-500/20 to-slate-900 border-amber-400 shadow-lg shadow-amber-500/10'
+                            : 'bg-slate-800/40 border-slate-700/70 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-sm text-white">🚴 {d.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase bg-amber-950 text-amber-300 border border-amber-800">
+                            {d.tag}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">{d.desc}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 3. SWIMMING FORMATS */}
+              {targetSport === 'swim' && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { id: 'swim_1500m', name: '1 500 M Eau Libre', tag: 'Classique', desc: 'Traversée standard en lac ou mer.' },
+                    { id: 'swim_3k', name: '3 000 M (3 KM)', tag: 'Endurance', desc: 'Défi longue distance en natation libre.' },
+                    { id: 'swim_5k', name: '5 000 M (5 KM)', tag: 'Marathon Nage', desc: 'Épreuve d\'ultra-endurance aquatique.' },
+                  ].map((d) => {
+                    const isSelected = profile.raceObjective.distance === d.id;
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => setProfile({
+                          ...profile,
+                          raceObjective: { ...profile.raceObjective, distance: d.id as RaceDistance, raceName: d.name }
+                        })}
+                        className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+                          isSelected
+                            ? 'bg-gradient-to-b from-cyan-500/20 to-slate-900 border-cyan-400 shadow-lg shadow-cyan-500/10'
+                            : 'bg-slate-800/40 border-slate-700/70 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-sm text-white">🏊 {d.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase bg-cyan-950 text-cyan-300 border border-cyan-800">
+                            {d.tag}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1">{d.desc}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* 4. TRIATHLON FORMATS */}
+              {targetSport === 'triathlon' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { id: 'xs', name: 'Triathlon XS', tag: 'Découverte', swim: '400m', bike: '10km', run: '2.5km', desc: 'Idéal pour un premier baptême.' },
+                    { id: 's', name: 'Triathlon S', tag: 'Sprint', swim: '750m', bike: '20km', run: '5km', desc: 'Dynamique et accessible.' },
+                    { id: 'm', name: 'Triathlon M', tag: 'Olympique', swim: '1500m', bike: '40km', run: '10km', desc: 'La distance reine internationale.' },
+                    { id: 'l', name: 'Triathlon L', tag: 'Half 70.3', swim: '1900m', bike: '90km', run: '21.1km', desc: 'Endurance longue distance.' },
+                    { id: 'xl', name: 'Triathlon XL', tag: 'Ironman 140.6', swim: '3800m', bike: '180km', run: '42.2km', desc: 'Le mythe ultime.' },
+                  ].map((d) => {
+                    const isSelected = profile.raceObjective.distance === d.id;
+                    return (
+                      <div
+                        key={d.id}
+                        onClick={() => setProfile({
+                          ...profile,
+                          raceObjective: { ...profile.raceObjective, distance: d.id as RaceDistance, raceName: d.name }
+                        })}
+                        className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+                          isSelected
+                            ? 'bg-gradient-to-b from-cyan-500/20 to-slate-900 border-cyan-400 shadow-lg shadow-cyan-500/10'
+                            : 'bg-slate-800/40 border-slate-700/70 hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-bold text-sm text-white">{d.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase bg-cyan-950 text-cyan-300 border border-cyan-800">
+                            {d.tag}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2 text-[11px] text-slate-300 font-mono mb-1">
+                          <span>🏊 {d.swim}</span>
+                          <span>🚴 {d.bike}</span>
+                          <span>🏃 {d.run}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-400">{d.desc}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Event Name & Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-800">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Nom de la course / Événement</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Nom de l'épreuve / Objectif</label>
                   <input
                     type="text"
                     value={profile.raceObjective.raceName}
@@ -560,13 +653,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       ...profile,
                       raceObjective: { ...profile.raceObjective, raceName: e.target.value }
                     })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-amber-500"
-                    placeholder="Ex: Triathlon de Paris ou Triathlon de Deauville"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500"
+                    placeholder="Ex: Marathon de Paris ou Défi Pierre Lavoie 135 km"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Date de la Course (Jour J)</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Date de la Course</label>
                   <input
                     type="date"
                     value={profile.raceObjective.raceDate}
@@ -574,37 +667,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       ...profile,
                       raceObjective: { ...profile.raceObjective, raceDate: e.target.value }
                     })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-amber-500"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500"
                   />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Type d'ambition</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { id: 'finisher', label: 'Finisher avec le sourire', icon: Shield, desc: 'Objectif régularité & plaisir' },
-                    { id: 'time', label: 'Chrono spécifique', icon: Clock, desc: 'Optimisation de la vitesse' },
-                    { id: 'podium', label: 'Top Performance', icon: Award, desc: 'Catégorie d\'âge / Compétition' },
-                  ].map((g) => (
-                    <button
-                      key={g.id}
-                      type="button"
-                      onClick={() => setProfile({
-                        ...profile,
-                        raceObjective: { ...profile.raceObjective, goalType: g.id as RaceGoal }
-                      })}
-                      className={`p-3 rounded-xl border text-left transition ${
-                        profile.raceObjective.goalType === g.id
-                          ? 'bg-amber-500/20 border-amber-400 text-amber-300'
-                          : 'bg-slate-800/40 border-slate-700 text-slate-400 hover:bg-slate-800'
-                      }`}
-                    >
-                      <g.icon className="w-4 h-4 mb-1" />
-                      <div className="text-xs font-bold text-white">{g.label}</div>
-                      <div className="text-[10px] text-slate-400">{g.desc}</div>
-                    </button>
-                  ))}
                 </div>
               </div>
             </div>
@@ -614,13 +678,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {step === 4 && (
             <div className="space-y-6">
               <div className="border-l-2 border-purple-500 pl-3">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Étape 4 : Disponibilités & Équipements</h3>
-                <p className="text-xs text-slate-400">Le planificateur adapte l'agencement des séances selon votre emploi du temps réel.</p>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Étape 4 : Vos Disponibilités Hebdomadaires</h3>
+                <p className="text-xs text-slate-400">Le programme place les séances clés sur vos jours de prédilection.</p>
               </div>
 
-              {/* Days selection */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-2">Jours disponibles pour vous entraîner</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">Jours où vous pouvez vous entraîner</label>
                 <div className="grid grid-cols-7 gap-1.5">
                   {[
                     { day: 1, label: 'Lun' },
@@ -662,13 +725,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       availability: { ...profile.availability, maxWeeklyHours: parseInt(e.target.value, 10) || 8 }
                     })}
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500"
-                    placeholder="8"
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">Recommandé : 6h à 10h pour un M</span>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Jour Sortie Longue Vélo</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Jour Sortie Longue Principale</label>
                   <select
                     value={profile.availability.preferredLongRideDay}
                     onChange={(e) => setProfile({
@@ -684,54 +745,19 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Jour Sortie Longue Course</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Jour de Repos Dédié</label>
                   <select
-                    value={profile.availability.preferredLongRunDay}
+                    value={profile.availability.preferredRestDay}
                     onChange={(e) => setProfile({
                       ...profile,
-                      availability: { ...profile.availability, preferredLongRunDay: parseInt(e.target.value, 10) }
+                      availability: { ...profile.availability, preferredRestDay: parseInt(e.target.value, 10) }
                     })}
                     className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500"
                   >
+                    <option value={1}>Lundi</option>
+                    <option value={5}>Vendredi</option>
                     <option value={7}>Dimanche</option>
-                    <option value={6}>Samedi</option>
-                    <option value={4}>Jeudi</option>
                   </select>
-                </div>
-              </div>
-
-              {/* Equipment Check */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-2">Vos équipements disponibles</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                  {[
-                    { key: 'hasGpsWatch', label: 'Montre GPS (Garmin/Coros/Apple)' },
-                    { key: 'hasHeartRateBelt', label: 'Ceinture Cardio Thoracique' },
-                    { key: 'hasSmartTrainer', label: 'Home-Trainer connecté / Zwift' },
-                    { key: 'hasWetsuit', label: 'Combinaison néoprène eau libre' },
-                    { key: 'hasTrisuit', label: 'Trifonction de triathlon' },
-                  ].map((eq) => {
-                    const isChecked = (profile.equipment as any)[eq.key];
-                    return (
-                      <label
-                        key={eq.key}
-                        className={`flex items-center space-x-2 p-2.5 rounded-lg border cursor-pointer transition ${
-                          isChecked ? 'bg-slate-800 border-cyan-500/50 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => setProfile({
-                            ...profile,
-                            equipment: { ...profile.equipment, [eq.key]: e.target.checked }
-                          })}
-                          className="rounded text-cyan-500 focus:ring-0"
-                        />
-                        <span className="text-[11px] leading-tight">{eq.label}</span>
-                      </label>
-                    );
-                  })}
                 </div>
               </div>
             </div>
@@ -741,51 +767,60 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {step === 5 && (
             <div className="space-y-5">
               <div className="border-l-2 border-emerald-500 pl-3">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Étape 5 : Récapitulatif & Calibration du Plan</h3>
-                <p className="text-xs text-slate-400">Vérifiez vos paramètres avant de générer votre programme d'entraînement scientifique.</p>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Étape 5 : Récapitulatif & Calibration</h3>
+                <p className="text-xs text-slate-400">Vérifiez vos paramètres avant de générer votre programme d'entraînement.</p>
               </div>
 
-              {/* Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/80 space-y-2">
-                  <div className="flex items-center space-x-2 text-xs font-bold text-cyan-400">
+                  <div className="text-xs font-bold text-cyan-400 flex items-center space-x-1.5">
                     <Activity className="w-4 h-4" />
-                    <span>Profil & Objectif</span>
+                    <span>Discipline & Objectif</span>
                   </div>
-                  <div className="text-sm font-semibold text-white">{profile.name} ({profile.age} ans, {profile.weightKg} kg)</div>
-                  <div className="text-xs text-slate-300">
-                    Cible : <strong className="text-amber-400">Triathlon {profile.raceObjective.distance.toUpperCase()}</strong> ({profile.raceObjective.raceName || 'Course cible'})
+                  <div className="text-sm font-bold text-white">
+                    {targetSport === 'run' && '🏃 Programme Course à Pied'}
+                    {targetSport === 'bike' && '🚴 Programme Cyclisme'}
+                    {targetSport === 'swim' && '🏊 Programme Natation'}
+                    {targetSport === 'triathlon' && '🏊🚴🏃 Programme Triathlon'}
+                  </div>
+                  <div className="text-xs text-amber-400 font-semibold">
+                    {profile.raceObjective.raceName || profile.raceObjective.distance}
                   </div>
                   <div className="text-xs text-slate-400">
-                    Disponibilités : {profile.availability.availableDays.length} jours/semaine (~{profile.availability.maxWeeklyHours}h max)
+                    Disponibilités : {profile.availability.availableDays.length} jours/sem. (~{profile.availability.maxWeeklyHours}h max)
                   </div>
                 </div>
 
                 <div className="p-4 bg-slate-800/60 rounded-xl border border-slate-700/80 space-y-2">
-                  <div className="flex items-center space-x-2 text-xs font-bold text-emerald-400">
+                  <div className="text-xs font-bold text-emerald-400 flex items-center space-x-1.5">
                     <Gauge className="w-4 h-4" />
-                    <span>Allures Cibles Personnalisées</span>
+                    <span>Allures de Calibration</span>
                   </div>
                   <div className="text-xs space-y-1">
-                    <div className="text-slate-300">🏃 EF : <strong className="text-white font-mono">{profile.runMetrics.efPaceMinKm}/km</strong> | Seuil : <strong className="text-emerald-400 font-mono">{profile.runMetrics.thresholdPaceMinKm}/km</strong></div>
-                    <div className="text-slate-300">🚴 FTP : <strong className="text-amber-400 font-mono">{profile.bikeMetrics.ftpWatts} W</strong> (~{profile.bikeMetrics.avgZ2SpeedKmh} km/h Z2)</div>
-                    <div className="text-slate-300">🏊 CSS : <strong className="text-cyan-400 font-mono">{profile.swimMetrics.cssPacePer100m}/100m</strong></div>
+                    {(targetSport === 'run' || targetSport === 'triathlon') && (
+                      <div className="text-slate-300">🏃 EF : <strong className="text-white font-mono">{profile.runMetrics.efPaceMinKm}/km</strong> | Seuil : <strong className="text-emerald-400 font-mono">{profile.runMetrics.thresholdPaceMinKm}/km</strong></div>
+                    )}
+                    {(targetSport === 'bike' || targetSport === 'triathlon') && (
+                      <div className="text-slate-300">🚴 FTP : <strong className="text-amber-400 font-mono">{profile.bikeMetrics.ftpWatts} W</strong> (~{profile.bikeMetrics.avgZ2SpeedKmh} km/h Z2)</div>
+                    )}
+                    {(targetSport === 'swim' || targetSport === 'triathlon') && (
+                      <div className="text-slate-300">🏊 CSS : <strong className="text-cyan-400 font-mono">{profile.swimMetrics.cssPacePer100m}/100m</strong></div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Ready banner */}
               <div className="p-4 bg-gradient-to-r from-cyan-950/60 via-slate-900 to-emerald-950/60 rounded-xl border border-cyan-500/30 text-center space-y-2">
-                <div className="text-sm font-bold text-white">✨ Tout est prêt pour débuter votre préparation !</div>
+                <div className="text-sm font-bold text-white">✨ Tout est calibré pour votre objectif !</div>
                 <p className="text-xs text-slate-300 max-w-xl mx-auto">
-                  Votre programme va être structuré avec les 4 phases physiologiques clés (Fondation, Développement, Spécifique, Affûtage), les séances briques indispensables et des conseils de coach pour chaque séance.
+                  Votre programme va être structuré sur les 4 phases physiologiques (Base, Build, Peak, Taper) avec des allures adaptées à votre niveau.
                 </p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer Navigation */}
+        {/* Footer */}
         <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
           {step > 1 ? (
             <button
@@ -813,7 +848,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               className="flex items-center space-x-2 px-6 py-2.5 bg-gradient-to-r from-cyan-500 via-amber-500 to-emerald-500 hover:opacity-95 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-xl shadow-cyan-500/20 transition transform active:scale-95"
             >
               <Sparkles className="w-4 h-4 text-slate-950" />
-              <span>Générer mon Programme TriaTrain</span>
+              <span>Générer mon Programme Personnalisé</span>
             </button>
           )}
         </div>

@@ -75,11 +75,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </h3>
 
             <p className="text-xs text-slate-300">
-              {profile.raceObjective.distance === 'xs' && '400m 🏊 + 10km 🚴 + 2.5km 🏃'}
-              {profile.raceObjective.distance === 's' && '750m 🏊 + 20km 🚴 + 5km 🏃'}
-              {profile.raceObjective.distance === 'm' && '1500m 🏊 + 40km 🚴 + 10km 🏃'}
-              {profile.raceObjective.distance === 'l' && '1900m 🏊 + 90km 🚴 + 21.1km 🏃'}
-              {profile.raceObjective.distance === 'xl' && '3800m 🏊 + 180km 🚴 + 42.2km 🏃'}
+              {profile.raceObjective.distance === 'xs' && '400m 🏊 + 10km 🚴 + 2.5km 🏃 (Triathlon Découverte)'}
+              {profile.raceObjective.distance === 's' && '750m 🏊 + 20km 🚴 + 5km 🏃 (Triathlon Sprint)'}
+              {profile.raceObjective.distance === 'm' && '1500m 🏊 + 40km 🚴 + 10km 🏃 (Triathlon Olympique)'}
+              {profile.raceObjective.distance === 'l' && '1900m 🏊 + 90km 🚴 + 21.1km 🏃 (Half 70.3)'}
+              {profile.raceObjective.distance === 'xl' && '3800m 🏊 + 180km 🚴 + 42.2km 🏃 (Ironman 140.6)'}
+              {profile.raceObjective.distance === 'run_5k' && '🏃 5.0 km Course à pied'}
+              {profile.raceObjective.distance === 'run_10k' && '🏃 10.0 km Course à pied'}
+              {profile.raceObjective.distance === 'run_semi' && '🏃 21.1 km Semi-Marathon'}
+              {profile.raceObjective.distance === 'run_marathon' && '🏃 42.195 km Marathon'}
+              {profile.raceObjective.distance === 'run_trail' && '🏃 ~30 km Trail Nature & Dénivelé'}
+              {profile.raceObjective.distance === 'bike_50k' && '🚴 50 km Sortie Rythmée'}
+              {profile.raceObjective.distance === 'bike_90k' && '🚴 90 km Gran Fondo'}
+              {profile.raceObjective.distance === 'bike_135k' && '🚴 135 km Défi Pierre Lavoie (La Boucle)'}
+              {profile.raceObjective.distance === 'bike_century' && '🚴 160 km Century Ride (100 Miles)'}
+              {profile.raceObjective.distance === 'bike_200k' && '🚴 200 km+ Ultra-Cyclisme'}
+              {profile.raceObjective.distance === 'swim_1500m' && '🏊 1 500 m Eau Libre'}
+              {profile.raceObjective.distance === 'swim_3k' && '🏊 3 000 m (3 km) Eau Libre'}
+              {profile.raceObjective.distance === 'swim_5k' && '🏊 5 000 m (5 km) Marathon Nage'}
             </p>
           </div>
 
