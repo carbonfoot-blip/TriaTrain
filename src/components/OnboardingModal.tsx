@@ -134,6 +134,15 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       availability: {
         ...profile.availability,
         maxWeeklyHours: profile.availability.maxWeeklyHours || 8,
+        weeklySchedule: profile.availability.weeklySchedule || [
+          { dayOfWeek: 1, sport: 'rest', category: 'recovery' },
+          { dayOfWeek: 2, sport: 'swim', category: 'technique' },
+          { dayOfWeek: 3, sport: 'bike', category: 'intervals' },
+          { dayOfWeek: 4, sport: 'run', category: 'intervals' },
+          { dayOfWeek: 5, sport: 'swim', category: 'endurance' },
+          { dayOfWeek: 6, sport: 'bike', category: 'endurance' },
+          { dayOfWeek: 7, sport: 'run', category: 'endurance' },
+        ],
       },
     };
     onSaveProfile(sanitizedProfile);

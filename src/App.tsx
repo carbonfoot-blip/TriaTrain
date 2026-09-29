@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AthleteProfile, TrainingPlan, Workout, WorkoutStatus } from './types/triathlon';
+import { AthleteProfile, TrainingPlan, Workout, WorkoutStatus, WeeklyDayPreference } from './types/triathlon';
 import { DEFAULT_ATHLETE_PROFILE } from './data/defaultProfile';
 import { generateTrainingPlan } from './utils/planGenerator';
 import { Navbar } from './components/Navbar';
@@ -10,6 +10,7 @@ import { BeginnerToolkit } from './components/BeginnerToolkit';
 import { WorkoutModal } from './components/WorkoutModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ProfileSettings } from './components/ProfileSettings';
+import { WeeklyScheduleModal } from './components/WeeklyScheduleModal';
 import { Activity, Sparkles, Download, Calendar, Compass, ShieldCheck } from 'lucide-react';
 import { downloadIcsFile } from './utils/icsExporter';
 
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [isWeeklyScheduleOpen, setIsWeeklyScheduleOpen] = useState<boolean>(false);
 
   // Check if first visit to prompt onboarding
   useEffect(() => {
@@ -127,6 +129,226 @@ export const App: React.FC = () => {
     }
   };
 
+  // 4. Swap or Move Workouts between days in the current week
+  const handleSwapWorkouts = (workoutId: string, targetDay: number, mode: 'swap' | 'move') => {
+    const currentWeek = plan.weeks[currentWeekIndex];
+    if (!currentWeek) return;
+
+    const sourceWo = currentWeek.workouts.find((w) => w.id === workoutId);
+    if (!sourceWo) return;
+    const sourceDay = sourceWo.dayOfWeek;
+    if (sourceDay === targetDay) return;
+
+    const addDaysToStart = (days: number) => {
+      const d = new Date(currentWeek.startDate);
+      d.setDate(d.getDate() + days);
+      return d.toISOString().split('T')[0];
+    };
+
+    const targetDate = addDaysToStart(targetDay - 1);
+    const sourceDate = addDaysToStart(sourceDay - 1);
+
+    let updatedWorkouts = [...currentWeek.workouts];
+
+    if (mode === 'swap') {
+      const targetWorkouts = updatedWorkouts.filter((w) => w.dayOfWeek === targetDay);
+      if (targetWorkouts.length > 0) {
+        updatedWorkouts = updatedWorkouts.map((w) => {
+          if (w.id === workoutId) {
+            return { ...w, dayOfWeek: targetDay, date: targetDate };
+          }
+          if (w.dayOfWeek === targetDay) {
+            return { ...w, dayOfWeek: sourceDay, date: sourceDate };
+          }
+          return w;
+        });
+      } else {
+        updatedWorkouts = updatedWorkouts.map((w) =>
+          w.id === workoutId ? { ...w, dayOfWeek: targetDay, date: targetDate } : w
+        );
+      }
+    } else {
+      updatedWorkouts = updatedWorkouts.map((w) =>
+        w.id === workoutId ? { ...w, dayOfWeek: targetDay, date: targetDate } : w
+      );
+    }
+
+    // Recompute week volume metrics
+    let totalDur = 0;
+    let totalDist = 0;
+    let swimMin = 0;
+    let bikeMin = 0;
+    let runMin = 0;
+    let strengthMin = 0;
+
+    updatedWorkouts.forEach((wo) => {
+      totalDur += wo.durationMinutes;
+      totalDist += wo.distanceMeters / 1000;
+      if (wo.sport === 'swim') swimMin += wo.durationMinutes;
+      else if (wo.sport === 'bike') bikeMin += wo.durationMinutes;
+      else if (wo.sport === 'run') runMin += wo.durationMinutes;
+      else if (wo.sport === 'brick') {
+        bikeMin += Math.round(wo.durationMinutes * 0.75);
+        runMin += Math.round(wo.durationMinutes * 0.25);
+      } else if (wo.sport === 'strength') strengthMin += wo.durationMinutes;
+    });
+
+    const updatedWeeks = plan.weeks.map((week, idx) => {
+      if (idx !== currentWeekIndex) return week;
+      return {
+        ...week,
+        workouts: updatedWorkouts,
+        totalDurationMinutes: totalDur,
+        totalDistanceKm: Math.round(totalDist * 10) / 10,
+        sportBreakdown: {
+          swimMinutes: swimMin,
+          bikeMinutes: bikeMin,
+          runMinutes: runMin,
+          strengthMinutes: strengthMin,
+        },
+      };
+    });
+
+    const updatedPlan: TrainingPlan = {
+      ...plan,
+      weeks: updatedWeeks,
+    };
+
+    setPlan(updatedPlan);
+    try {
+      localStorage.setItem('triatrain_training_plan', JSON.stringify(updatedPlan));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 5. Add a workout to a day in the current week
+  const handleAddWorkoutToDay = (dayOfWeek: number) => {
+    const currentWeek = plan.weeks[currentWeekIndex];
+    if (!currentWeek) return;
+
+    const d = new Date(currentWeek.startDate);
+    d.setDate(d.getDate() + (dayOfWeek - 1));
+    const dayDate = d.toISOString().split('T')[0];
+
+    const newWorkout: Workout = {
+      id: `custom-wo-${Date.now()}`,
+      weekNumber: currentWeek.weekNumber,
+      dayOfWeek,
+      date: dayDate,
+      title: `Nouvelle Séance (Jour ${dayOfWeek})`,
+      sport: 'run',
+      category: 'endurance',
+      phase: currentWeek.phase,
+      durationMinutes: 45,
+      distanceMeters: 7000,
+      targetZone: 'Z2',
+      intensityRpe: 5,
+      description: 'Séance ajoutée au programme. Cliquez sur "Changer la séance" pour choisir dans le catalogue ou "Modifier" pour l\'ajuster.',
+      coachTips: ['Personnalisez les détails selon vos disponibilités du jour.'],
+      steps: [
+        { type: 'warmup', name: 'Échauffement progressif', durationMinutes: 10, targetZone: 'Z1', targetDescription: 'Mise en route douce' },
+        { type: 'interval', name: 'Corps de séance principal', durationMinutes: 25, targetZone: 'Z2', targetDescription: 'Allure régulière' },
+        { type: 'cooldown', name: 'Retour au calme', durationMinutes: 10, targetZone: 'Z1', targetDescription: 'Décrassage' },
+      ],
+      status: 'planned',
+    };
+
+    const updatedWeeks = plan.weeks.map((week, idx) => {
+      if (idx !== currentWeekIndex) return week;
+      const existingOnDay = week.workouts.filter((w) => w.dayOfWeek === dayOfWeek);
+      const filteredWorkouts = existingOnDay.length === 1 && existingOnDay[0].sport === 'rest'
+        ? week.workouts.filter((w) => w.id !== existingOnDay[0].id)
+        : week.workouts;
+
+      return {
+        ...week,
+        workouts: [...filteredWorkouts, newWorkout],
+      };
+    });
+
+    const updatedPlan: TrainingPlan = {
+      ...plan,
+      weeks: updatedWeeks,
+    };
+
+    setPlan(updatedPlan);
+    try {
+      localStorage.setItem('triatrain_training_plan', JSON.stringify(updatedPlan));
+    } catch (e) {
+      console.error(e);
+    }
+
+    setSelectedWorkout(newWorkout);
+  };
+
+  // 6. Delete a workout from the current week
+  const handleDeleteWorkout = (workoutId: string) => {
+    const currentWeek = plan.weeks[currentWeekIndex];
+    if (!currentWeek) return;
+
+    const targetWo = currentWeek.workouts.find((w) => w.id === workoutId);
+    if (!targetWo) return;
+    const dayOfWeek = targetWo.dayOfWeek;
+
+    const otherOnDay = currentWeek.workouts.filter((w) => w.dayOfWeek === dayOfWeek && w.id !== workoutId);
+    let updatedWorkouts = currentWeek.workouts.filter((w) => w.id !== workoutId);
+
+    if (otherOnDay.length === 0) {
+      updatedWorkouts.push({
+        id: `rest-${Date.now()}`,
+        weekNumber: currentWeek.weekNumber,
+        dayOfWeek,
+        date: targetWo.date,
+        title: 'Repos complet & Régénération',
+        sport: 'rest',
+        category: 'recovery',
+        phase: currentWeek.phase,
+        durationMinutes: 0,
+        distanceMeters: 0,
+        targetZone: 'Z0',
+        intensityRpe: 1,
+        description: 'Journée de repos sans entraînement.',
+        coachTips: ['Le repos fait partie intégrante de l\'entraînement.'],
+        steps: [],
+        status: 'planned',
+      });
+    }
+
+    const updatedWeeks = plan.weeks.map((week, idx) => {
+      if (idx !== currentWeekIndex) return week;
+      return {
+        ...week,
+        workouts: updatedWorkouts,
+      };
+    });
+
+    const updatedPlan: TrainingPlan = {
+      ...plan,
+      weeks: updatedWeeks,
+    };
+
+    setPlan(updatedPlan);
+    try {
+      localStorage.setItem('triatrain_training_plan', JSON.stringify(updatedPlan));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 7. Save custom weekly schedule preference
+  const handleSaveWeeklySchedule = (updatedSchedule: WeeklyDayPreference[], availableDays: number[]) => {
+    const updatedProfile: AthleteProfile = {
+      ...profile,
+      availability: {
+        ...profile.availability,
+        availableDays,
+        weeklySchedule: updatedSchedule,
+      },
+    };
+    handleSaveProfile(updatedProfile);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white">
       {/* Top Navigation */}
@@ -150,6 +372,10 @@ export const App: React.FC = () => {
             onSelectWorkout={(wo) => setSelectedWorkout(wo)}
             onToggleWorkoutStatus={handleToggleWorkoutStatus}
             onOpenOnboarding={() => setIsOnboardingOpen(true)}
+            onOpenWeeklySchedule={() => setIsWeeklyScheduleOpen(true)}
+            onSwapWorkouts={handleSwapWorkouts}
+            onAddWorkoutToDay={handleAddWorkoutToDay}
+            onDeleteWorkout={handleDeleteWorkout}
           />
         )}
 
@@ -212,6 +438,7 @@ export const App: React.FC = () => {
         isOpen={!!selectedWorkout}
         onClose={() => setSelectedWorkout(null)}
         onUpdateWorkout={handleUpdateWorkout}
+        profile={profile}
       />
 
       <OnboardingModal
@@ -227,6 +454,14 @@ export const App: React.FC = () => {
         profile={profile}
         onSaveProfile={handleSaveProfile}
       />
+
+      <WeeklyScheduleModal
+        isOpen={isWeeklyScheduleOpen}
+        onClose={() => setIsWeeklyScheduleOpen(false)}
+        profile={profile}
+        onSaveSchedule={handleSaveWeeklySchedule}
+      />
     </div>
   );
 };
+

@@ -39,6 +39,15 @@ export interface SwimMetrics {
   comfortLevel: 'beginner' | 'intermediate' | 'advanced';
 }
 
+export type WorkoutCategory = 'endurance' | 'intervals' | 'tempo' | 'threshold' | 'recovery' | 'technique' | 'brick' | 'strength' | 'rest';
+
+export interface WeeklyDayPreference {
+  dayOfWeek: number; // 1: Lundi ... 7: Dimanche
+  sport: SportType;
+  category?: WorkoutCategory;
+  customTitle?: string;
+}
+
 export interface AthleteProfile {
   id: string;
   name: string;
@@ -67,6 +76,7 @@ export interface AthleteProfile {
     preferredLongRideDay: number;
     preferredLongRunDay: number;
     preferredRestDay: number;
+    weeklySchedule?: WeeklyDayPreference[];
   };
   equipment: {
     hasGpsWatch: boolean;

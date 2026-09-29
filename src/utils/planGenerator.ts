@@ -196,33 +196,120 @@ export function generateTrainingPlan(profile: AthleteProfile): TrainingPlan {
       const distFactor = profile.raceObjective.distance === 'xs' ? 0.6 : profile.raceObjective.distance === 's' ? 0.8 : profile.raceObjective.distance === 'm' ? 1.0 : profile.raceObjective.distance === 'l' ? 1.4 : 1.8;
       const triMult = progressMultiplier * distFactor;
 
-      if (availableDays.includes(1) && restDay !== 1) workouts.push(createRecoveryWorkout(w, 1, addDays(weekStart, 0), phase, css));
-      else workouts.push(createRestWorkout(w, 1, addDays(weekStart, 0)));
+      const userSchedule = profile.availability.weeklySchedule;
+      const hasCustomSchedule = userSchedule && userSchedule.length > 0;
 
-      if (availableDays.includes(2)) workouts.push(createSwimWorkout(w, 2, addDays(weekStart, 1), phase, css, triMult, isRestWeek));
-      if (availableDays.includes(3)) workouts.push(createBikeIntervalWorkout(w, 3, addDays(weekStart, 2), phase, ftp, avgBikeSpeed, triMult, isRestWeek));
-      if (availableDays.includes(4)) workouts.push(createRunIntervalWorkout(w, 4, addDays(weekStart, 3), phase, threshPace, vmaPace, efPace, triMult, isRestWeek));
-      if (availableDays.includes(5)) workouts.push(createSwimAerobicWorkout(w, 5, addDays(weekStart, 4), phase, css, triMult, isRestWeek));
+      if (hasCustomSchedule) {
+        // Generate workouts following the athlete's exact day-by-day preferences
+        for (let d = 1; d <= 7; d++) {
+          const dayDate = addDays(weekStart, d - 1);
+          const pref = userSchedule.find((s) => s.dayOfWeek === d);
 
-      if (availableDays.includes(6)) {
-        if (longRideDay === 6) {
-          if (phase === 'build' || phase === 'peak') {
-            workouts.push(createBrickWorkout(w, 6, addDays(weekStart, 5), phase, ftp, avgBikeSpeed, marathonPace, efPace, triMult, isRestWeek));
-          } else {
-            workouts.push(createLongBikeWorkout(w, 6, addDays(weekStart, 5), phase, ftp, avgBikeSpeed, triMult, isRestWeek));
+          if (!pref || pref.sport === 'rest' || (!availableDays.includes(d) && restDay === d)) {
+            workouts.push(createRestWorkout(w, d, dayDate));
+            continue;
           }
-        } else {
-          workouts.push(createLongRunWorkout(w, 6, addDays(weekStart, 5), phase, efPace, marathonPace, triMult, isRestWeek));
-        }
-      }
 
-      if (availableDays.includes(7)) {
-        if (w === totalWeeks) {
-          workouts.push(createRaceDayWorkout(w, 7, addDays(weekStart, 6), profile));
-        } else if (longRunDay === 7) {
-          workouts.push(createLongRunWorkout(w, 7, addDays(weekStart, 6), phase, efPace, marathonPace, triMult, isRestWeek));
-        } else {
-          workouts.push(createLongBikeWorkout(w, 7, addDays(weekStart, 6), phase, ftp, avgBikeSpeed, triMult, isRestWeek));
+          // Race week Day J
+          if (w === totalWeeks && (d === 7 || d === 6)) {
+            workouts.push(createRaceDayWorkout(w, d, dayDate, profile));
+            continue;
+          }
+
+          switch (pref.sport) {
+            case 'swim':
+              if (pref.category === 'endurance') {
+                workouts.push(createSwimAerobicWorkout(w, d, dayDate, phase, css, triMult, isRestWeek));
+              } else if (pref.category === 'recovery') {
+                workouts.push(createRecoveryWorkout(w, d, dayDate, phase, css));
+              } else {
+                workouts.push(createSwimWorkout(w, d, dayDate, phase, css, triMult, isRestWeek));
+              }
+              break;
+
+            case 'bike':
+              if (pref.category === 'intervals' || pref.category === 'threshold') {
+                workouts.push(createBikeIntervalWorkout(w, d, dayDate, phase, ftp, avgBikeSpeed, triMult, isRestWeek));
+              } else if (pref.category === 'tempo') {
+                workouts.push(createBikeTempoWorkout(w, d, dayDate, phase, ftp, avgBikeSpeed, triMult, isRestWeek));
+              } else if (pref.category === 'recovery') {
+                workouts.push(createBikeRecoveryWorkout(w, d, dayDate, phase, ftp, avgBikeSpeed));
+              } else if (pref.category === 'technique') {
+                workouts.push(createBikeCadenceWorkout(w, d, dayDate, phase, ftp, avgBikeSpeed, isRestWeek));
+              } else {
+                // Endurance / default
+                if (d === longRideDay || d === 6 || d === 7) {
+                  workouts.push(createLongBikeWorkout(w, d, dayDate, phase, ftp, avgBikeSpeed, triMult, isRestWeek));
+                } else {
+                  workouts.push(createBikeCadenceWorkout(w, d, dayDate, phase, ftp, avgBikeSpeed, isRestWeek));
+                }
+              }
+              break;
+
+            case 'run':
+              if (pref.category === 'intervals') {
+                // Alternance VMA et Seuil
+                if (w % 2 === 1) {
+                  workouts.push(createRunVmaWorkout(w, d, dayDate, phase, vmaPace, efPace, triMult, isRestWeek));
+                } else {
+                  workouts.push(createRunIntervalWorkout(w, d, dayDate, phase, threshPace, vmaPace, efPace, triMult, isRestWeek));
+                }
+              } else if (pref.category === 'threshold') {
+                workouts.push(createRunIntervalWorkout(w, d, dayDate, phase, threshPace, vmaPace, efPace, triMult, isRestWeek));
+              } else if (pref.category === 'recovery') {
+                workouts.push(createRunRecoveryWorkout(w, d, dayDate, phase, efPace));
+              } else if (pref.category === 'endurance') {
+                if (d === longRunDay || d === 7 || d === 6) {
+                  workouts.push(createLongRunWorkout(w, d, dayDate, phase, efPace, marathonPace, triMult, isRestWeek));
+                } else {
+                  workouts.push(createRunEasyWorkout(w, d, dayDate, phase, efPace, triMult, isRestWeek));
+                }
+              } else {
+                workouts.push(createRunEasyWorkout(w, d, dayDate, phase, efPace, triMult, isRestWeek));
+              }
+              break;
+
+            case 'brick':
+              workouts.push(createBrickWorkout(w, d, dayDate, phase, ftp, avgBikeSpeed, marathonPace, efPace, triMult, isRestWeek));
+              break;
+
+            case 'strength':
+              workouts.push(createStrengthWorkout(w, d, dayDate, phase));
+              break;
+
+            default:
+              workouts.push(createRestWorkout(w, d, dayDate));
+          }
+        }
+      } else {
+        if (availableDays.includes(1) && restDay !== 1) workouts.push(createRecoveryWorkout(w, 1, addDays(weekStart, 0), phase, css));
+        else workouts.push(createRestWorkout(w, 1, addDays(weekStart, 0)));
+
+        if (availableDays.includes(2)) workouts.push(createSwimWorkout(w, 2, addDays(weekStart, 1), phase, css, triMult, isRestWeek));
+        if (availableDays.includes(3)) workouts.push(createBikeIntervalWorkout(w, 3, addDays(weekStart, 2), phase, ftp, avgBikeSpeed, triMult, isRestWeek));
+        if (availableDays.includes(4)) workouts.push(createRunIntervalWorkout(w, 4, addDays(weekStart, 3), phase, threshPace, vmaPace, efPace, triMult, isRestWeek));
+        if (availableDays.includes(5)) workouts.push(createSwimAerobicWorkout(w, 5, addDays(weekStart, 4), phase, css, triMult, isRestWeek));
+
+        if (availableDays.includes(6)) {
+          if (longRideDay === 6) {
+            if (phase === 'build' || phase === 'peak') {
+              workouts.push(createBrickWorkout(w, 6, addDays(weekStart, 5), phase, ftp, avgBikeSpeed, marathonPace, efPace, triMult, isRestWeek));
+            } else {
+              workouts.push(createLongBikeWorkout(w, 6, addDays(weekStart, 5), phase, ftp, avgBikeSpeed, triMult, isRestWeek));
+            }
+          } else {
+            workouts.push(createLongRunWorkout(w, 6, addDays(weekStart, 5), phase, efPace, marathonPace, triMult, isRestWeek));
+          }
+        }
+
+        if (availableDays.includes(7)) {
+          if (w === totalWeeks) {
+            workouts.push(createRaceDayWorkout(w, 7, addDays(weekStart, 6), profile));
+          } else if (longRunDay === 7) {
+            workouts.push(createLongRunWorkout(w, 7, addDays(weekStart, 6), phase, efPace, marathonPace, triMult, isRestWeek));
+          } else {
+            workouts.push(createLongBikeWorkout(w, 7, addDays(weekStart, 6), phase, ftp, avgBikeSpeed, triMult, isRestWeek));
+          }
         }
       }
     }

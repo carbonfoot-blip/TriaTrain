@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Save, User, Activity, Gauge, Flame, Download, Upload, RefreshCw, Layers, Heart } from 'lucide-react';
-import { AthleteProfile, RaceDistance, RaceGoal, TargetSport } from '../types/triathlon';
+import { X, Save, User, Activity, Gauge, Flame, Download, Upload, RefreshCw, Layers, Heart, Calendar } from 'lucide-react';
+import { AthleteProfile, RaceDistance, RaceGoal, TargetSport, SportType, WorkoutCategory } from '../types/triathlon';
 import { estimateMaxHR } from '../utils/zonesCalculator';
 
 interface ProfileSettingsProps {
@@ -419,6 +419,125 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                   className="w-full px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-white text-xs font-mono text-center"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Weekly Schedule Days by Sport */}
+          <div className="space-y-3 pt-2 border-t border-slate-800">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center space-x-1.5">
+                <Calendar className="w-4 h-4" />
+                <span>📅 Jours précis par sport (Semaine type)</span>
+              </h4>
+              <span className="text-[10px] text-slate-400">Ex: Course le mercredi, Natation ven/dim...</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-7 gap-2">
+              {[
+                { day: 1, name: 'Lundi' },
+                { day: 2, name: 'Mardi' },
+                { day: 3, name: 'Mercredi' },
+                { day: 4, name: 'Jeudi' },
+                { day: 5, name: 'Vendredi' },
+                { day: 6, name: 'Samedi' },
+                { day: 7, name: 'Dimanche' },
+              ].map((d) => {
+                const currentSched = profile.availability.weeklySchedule || [
+                  { dayOfWeek: 1, sport: 'rest', category: 'recovery' },
+                  { dayOfWeek: 2, sport: 'swim', category: 'technique' },
+                  { dayOfWeek: 3, sport: 'bike', category: 'intervals' },
+                  { dayOfWeek: 4, sport: 'run', category: 'intervals' },
+                  { dayOfWeek: 5, sport: 'swim', category: 'endurance' },
+                  { dayOfWeek: 6, sport: 'bike', category: 'endurance' },
+                  { dayOfWeek: 7, sport: 'run', category: 'endurance' },
+                ];
+                const dayPref = currentSched.find((s) => s.dayOfWeek === d.day) || { dayOfWeek: d.day, sport: 'rest' as SportType, category: 'recovery' as WorkoutCategory };
+
+                return (
+                  <div key={d.day} className="p-2 bg-slate-950/70 border border-slate-800 rounded-lg space-y-1.5">
+                    <span className="text-[11px] font-bold text-white block text-center border-b border-slate-800 pb-1">
+                      {d.name.substring(0, 3)}
+                    </span>
+                    <select
+                      value={dayPref.sport}
+                      onChange={(e) => {
+                        const newSport = e.target.value as SportType;
+                        let newCat: WorkoutCategory = 'endurance';
+                        if (newSport === 'rest') newCat = 'recovery';
+                        else if (newSport === 'strength') newCat = 'strength';
+                        else if (newSport === 'brick') newCat = 'brick';
+                        else if (newSport === 'run') newCat = d.day === 3 || d.day === 4 ? 'intervals' : 'endurance';
+                        else if (newSport === 'bike') newCat = d.day === 3 ? 'intervals' : 'endurance';
+                        else if (newSport === 'swim') newCat = d.day === 2 ? 'technique' : 'endurance';
+
+                        const updatedSched = currentSched.map((s) => s.dayOfWeek === d.day ? { ...s, sport: newSport, category: newCat } : s);
+                        setProfile({
+                          ...profile,
+                          availability: {
+                            ...profile.availability,
+                            weeklySchedule: updatedSched,
+                            availableDays: updatedSched.filter((s) => s.sport !== 'rest').map((s) => s.dayOfWeek)
+                          }
+                        });
+                      }}
+                      className="w-full p-1 bg-slate-900 border border-slate-700 rounded text-[11px] text-white"
+                    >
+                      <option value="run">🏃 Course</option>
+                      <option value="bike">🚴 Vélo</option>
+                      <option value="swim">🏊 Nage</option>
+                      <option value="brick">⚡ Brique</option>
+                      <option value="strength">💪 PPG</option>
+                      <option value="rest">💤 Repos</option>
+                    </select>
+
+                    {dayPref.sport !== 'rest' && (
+                      <select
+                        value={dayPref.category || 'endurance'}
+                        onChange={(e) => {
+                          const newCat = e.target.value as WorkoutCategory;
+                          const updatedSched = currentSched.map((s) => s.dayOfWeek === d.day ? { ...s, category: newCat } : s);
+                          setProfile({
+                            ...profile,
+                            availability: {
+                              ...profile.availability,
+                              weeklySchedule: updatedSched
+                            }
+                          });
+                        }}
+                        className="w-full p-1 bg-slate-900 border border-slate-800 rounded text-[9px] text-slate-300"
+                      >
+                        {dayPref.sport === 'run' && (
+                          <>
+                            <option value="intervals">Intervalles</option>
+                            <option value="threshold">Seuil</option>
+                            <option value="endurance">Endurance</option>
+                            <option value="recovery">Récup</option>
+                          </>
+                        )}
+                        {dayPref.sport === 'bike' && (
+                          <>
+                            <option value="intervals">SweetSpot</option>
+                            <option value="technique">Cadence</option>
+                            <option value="endurance">Sortie Longue</option>
+                            <option value="tempo">Tempo</option>
+                            <option value="recovery">Récup</option>
+                          </>
+                        )}
+                        {dayPref.sport === 'swim' && (
+                          <>
+                            <option value="technique">Technique</option>
+                            <option value="threshold">Seuil CSS</option>
+                            <option value="endurance">Aérobie</option>
+                            <option value="recovery">Récup</option>
+                          </>
+                        )}
+                        {dayPref.sport === 'brick' && <option value="brick">Brique</option>}
+                        {dayPref.sport === 'strength' && <option value="strength">Gainage</option>}
+                      </select>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

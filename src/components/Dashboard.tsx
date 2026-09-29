@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ChevronLeft, ChevronRight, Calendar, Flag, Award, 
-  Activity, Clock, MapPin, Zap, Flame, CheckCircle, Info, Sparkles 
+  Activity, Clock, MapPin, Zap, Flame, CheckCircle, Info, Sparkles, Sliders
 } from 'lucide-react';
 import { AthleteProfile, TrainingPlan, TrainingWeek, Workout, WorkoutStatus } from '../types/triathlon';
 import { WeekCalendar } from './WeekCalendar';
@@ -14,6 +14,10 @@ interface DashboardProps {
   onSelectWorkout: (workout: Workout) => void;
   onToggleWorkoutStatus: (workoutId: string, currentStatus: WorkoutStatus) => void;
   onOpenOnboarding: () => void;
+  onOpenWeeklySchedule?: () => void;
+  onSwapWorkouts?: (workoutId: string, targetDay: number, mode: 'swap' | 'move') => void;
+  onAddWorkoutToDay?: (dayOfWeek: number) => void;
+  onDeleteWorkout?: (workoutId: string) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -24,6 +28,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onSelectWorkout,
   onToggleWorkoutStatus,
   onOpenOnboarding,
+  onOpenWeeklySchedule,
+  onSwapWorkouts,
+  onAddWorkoutToDay,
+  onDeleteWorkout,
 }) => {
   const currentWeek = plan.weeks[currentWeekIndex] || plan.weeks[0];
 
@@ -221,7 +229,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Week Calendar */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
             <Calendar className="w-5 h-5 text-cyan-400" />
             <h2 className="text-base font-bold text-white">
@@ -231,13 +239,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
               ({currentWeek.startDate} au {currentWeek.endDate})
             </span>
           </div>
-          <span className="text-xs text-slate-400">Cliquez sur une séance pour afficher les détails et allures cibles</span>
+
+          <div className="flex items-center space-x-2">
+            {onOpenWeeklySchedule && (
+              <button
+                type="button"
+                onClick={onOpenWeeklySchedule}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-xs font-bold rounded-lg transition shadow-sm"
+              >
+                <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+                <span>⚙️ Jours de sport (Semaine type)</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <WeekCalendar
           currentWeek={currentWeek}
           onSelectWorkout={onSelectWorkout}
           onToggleWorkoutStatus={onToggleWorkoutStatus}
+          onSwapWorkouts={onSwapWorkouts}
+          onAddWorkoutToDay={onAddWorkoutToDay}
+          onDeleteWorkout={onDeleteWorkout}
         />
       </div>
     </div>
