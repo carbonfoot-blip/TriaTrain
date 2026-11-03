@@ -7,6 +7,7 @@ import {
 import confetti from 'canvas-confetti';
 import { AthleteProfile, RaceDistance, RaceGoal, ExperienceLevel, TargetSport } from '../types/triathlon';
 import { estimateMaxHR, extrapolateRunPaces } from '../utils/zonesCalculator';
+import { getMondayOfWeek, getStartDatePresets } from '../utils/planGenerator';
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -710,9 +711,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 </div>
               )}
 
-              {/* Event Name & Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-800">
-                <div className="sm:col-span-2">
+              {/* Event Name & Dates (Start Date + Race Date) */}
+              <div className="space-y-4 pt-3 border-t border-slate-800">
+                <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Nom de l'épreuve / Objectif</label>
                   <input
                     type="text"
@@ -726,17 +727,79 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Date de la Course</label>
-                  <input
-                    type="date"
-                    value={profile.raceObjective.raceDate || ''}
-                    onChange={(e) => setProfile({
-                      ...profile,
-                      raceObjective: { ...profile.raceObjective, raceDate: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-cyan-500"
-                  />
+                {/* Start Date of Program (Week 1) + Race Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-3 bg-slate-900/90 border border-cyan-500/30 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-cyan-300 flex items-center space-x-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>Date de début du programme (Semaine 1)</span>
+                      </label>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
+                        Passé, présent ou futur
+                      </span>
+                    </div>
+                    <input
+                      type="date"
+                      value={profile.raceObjective.startDate || getMondayOfWeek()}
+                      onChange={(e) => setProfile({
+                        ...profile,
+                        raceObjective: {
+                          ...profile.raceObjective,
+                          startDate: e.target.value ? getMondayOfWeek(e.target.value) : getMondayOfWeek(),
+                        }
+                      })}
+                      className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs font-mono focus:border-cyan-500"
+                    />
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {getStartDatePresets().map((preset) => {
+                        const currentStart = getMondayOfWeek(profile.raceObjective.startDate);
+                        const isActive = currentStart === preset.date;
+                        return (
+                          <button
+                            key={preset.date}
+                            type="button"
+                            onClick={() => setProfile({
+                              ...profile,
+                              raceObjective: { ...profile.raceObjective, startDate: preset.date }
+                            })}
+                            className={`px-2 py-1 rounded text-[10px] font-bold transition border ${
+                              isActive
+                                ? 'bg-cyan-600 text-white border-cyan-400 shadow-sm'
+                                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                            }`}
+                            title={preset.sublabel}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-snug">
+                      💡 Aligné automatiquement sur le <strong>Lundi ({getMondayOfWeek(profile.raceObjective.startDate)})</strong>. Choisissez la semaine passée si vous avez déjà commencé vos entraînements !
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-slate-900/90 border border-slate-800 rounded-xl space-y-2 flex flex-col justify-between">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-amber-300 flex items-center space-x-1.5">
+                        <Award className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Date de la Course / Échéance Cible</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={profile.raceObjective.raceDate || ''}
+                        onChange={(e) => setProfile({
+                          ...profile,
+                          raceObjective: { ...profile.raceObjective, raceDate: e.target.value }
+                        })}
+                        className="w-full px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs font-mono focus:border-cyan-500"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-snug">
+                      La durée totale du plan (8 à 24 semaines) s'ajuste automatiquement entre le début de la Semaine 1 et le jour de votre course.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -857,6 +920,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   </div>
                   <div className="text-xs text-slate-400">
                     Disponibilités : {profile.availability.availableDays.length} jours/sem. (~{profile.availability.maxWeeklyHours}h max)
+                  </div>
+                  <div className="text-xs text-cyan-300 font-mono">
+                    📅 Début Semaine 1 : Lundi {getMondayOfWeek(profile.raceObjective.startDate)}
                   </div>
                 </div>
 

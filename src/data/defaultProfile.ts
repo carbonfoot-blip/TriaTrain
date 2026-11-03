@@ -1,4 +1,5 @@
 import { AthleteProfile } from '../types/triathlon';
+import { getMondayOfWeek } from '../utils/planGenerator';
 
 export const DEFAULT_ATHLETE_PROFILE: AthleteProfile = {
   id: 'athlete-1',
@@ -34,6 +35,7 @@ export const DEFAULT_ATHLETE_PROFILE: AthleteProfile = {
     sport: 'triathlon',
     distance: 'm',
     raceName: 'Triathlon International Olympique (Distance M)',
+    startDate: getMondayOfWeek(),
     raceDate: new Date(Date.now() + 12 * 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 12 weeks ahead
     goalType: 'finisher',
     targetTimeHours: '2h45',

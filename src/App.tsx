@@ -8,7 +8,11 @@ import {
   WeeklyDayPreference,
 } from './types/triathlon';
 import { DEFAULT_ATHLETE_PROFILE } from './data/defaultProfile';
-import { generateTrainingPlan } from './utils/planGenerator';
+import {
+  generateTrainingPlan,
+  shiftTrainingPlanStartDate,
+  getMondayOfWeek,
+} from './utils/planGenerator';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { PlanOverview } from './components/PlanOverview';
@@ -161,7 +165,7 @@ export const App: React.FC = () => {
     if (sourceDay === targetDay) return;
 
     const addDaysToStart = (days: number) => {
-      const d = new Date(currentWeek.startDate);
+      const d = new Date(`${currentWeek.startDate}T12:00:00`);
       d.setDate(d.getDate() + days);
       return d.toISOString().split('T')[0];
     };
@@ -248,7 +252,7 @@ export const App: React.FC = () => {
     const currentWeek = plan.weeks[currentWeekIndex];
     if (!currentWeek) return;
 
-    const d = new Date(currentWeek.startDate);
+    const d = new Date(`${currentWeek.startDate}T12:00:00`);
     d.setDate(d.getDate() + (dayOfWeek - 1));
     const dayDate = d.toISOString().split('T')[0];
 
@@ -478,6 +482,28 @@ export const App: React.FC = () => {
     }
   };
 
+  // 10. Shift existing training plan start date (Week 1) without losing completed workouts or Garmin syncs
+  const handleShiftPlanStartDate = (newStartDateStr: string) => {
+    const alignedStart = getMondayOfWeek(newStartDateStr);
+    const shiftedPlan = shiftTrainingPlanStartDate(plan, alignedStart);
+    const updatedProfile: AthleteProfile = {
+      ...profile,
+      raceObjective: {
+        ...profile.raceObjective,
+        startDate: alignedStart,
+      },
+    };
+
+    setProfile(updatedProfile);
+    setPlan(shiftedPlan);
+    try {
+      localStorage.setItem('triatrain_athlete_profile', JSON.stringify(updatedProfile));
+      localStorage.setItem('triatrain_training_plan', JSON.stringify(shiftedPlan));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white">
       {/* Top Navigation */}
@@ -507,6 +533,7 @@ export const App: React.FC = () => {
             onSwapWorkouts={handleSwapWorkouts}
             onAddWorkoutToDay={handleAddWorkoutToDay}
             onDeleteWorkout={handleDeleteWorkout}
+            onShiftPlanStartDate={handleShiftPlanStartDate}
           />
         )}
 
