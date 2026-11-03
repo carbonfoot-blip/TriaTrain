@@ -6,7 +6,7 @@
 
 ## 📌 Métadonnées
 - **ID de la Spécification :** SPEC-001
-- **Statut :** `En cours`
+- **Statut :** `Terminé`
 - **Auteur :** Félix-Antoine Legault
 - **Date de création :** 2026-11-02
 - **Branche Git cible :** `feature/garmin-sync-connect`
@@ -64,3 +64,4 @@
 - [x] Rendu fluide et interactif sans erreurs React dans la console.
 - [x] Validation stricte TypeScript sans erreurs.
 - [x] `npm.cmd run build` s'exécute avec succès (code de retour 0).
+
