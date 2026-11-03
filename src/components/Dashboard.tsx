@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   ChevronLeft, ChevronRight, Calendar, Flag, Award, 
-  Activity, Clock, MapPin, Zap, Flame, CheckCircle, Info, Sparkles, Sliders
+  Activity, Clock, MapPin, Zap, Flame, CheckCircle, Info, Sparkles, Sliders, Watch
 } from 'lucide-react';
 import { AthleteProfile, TrainingPlan, TrainingWeek, Workout, WorkoutStatus } from '../types/triathlon';
 import { WeekCalendar } from './WeekCalendar';
@@ -15,6 +15,7 @@ interface DashboardProps {
   onToggleWorkoutStatus: (workoutId: string, currentStatus: WorkoutStatus) => void;
   onOpenOnboarding: () => void;
   onOpenWeeklySchedule?: () => void;
+  onOpenGarminSync?: () => void;
   onSwapWorkouts?: (workoutId: string, targetDay: number, mode: 'swap' | 'move') => void;
   onAddWorkoutToDay?: (dayOfWeek: number) => void;
   onDeleteWorkout?: (workoutId: string) => void;
@@ -29,6 +30,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onToggleWorkoutStatus,
   onOpenOnboarding,
   onOpenWeeklySchedule,
+  onOpenGarminSync,
   onSwapWorkouts,
   onAddWorkoutToDay,
   onDeleteWorkout,
@@ -240,7 +242,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {onOpenGarminSync && (
+              <button
+                type="button"
+                onClick={onOpenGarminSync}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-300 text-xs font-bold rounded-lg transition shadow-sm"
+              >
+                <Watch className="w-3.5 h-3.5 text-emerald-400" />
+                <span>⌚ Synchroniser Garmin</span>
+              </button>
+            )}
+
             {onOpenWeeklySchedule && (
               <button
                 type="button"

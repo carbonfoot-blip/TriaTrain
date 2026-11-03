@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, Compass, Layers, ShieldCheck, UserCheck, Download, PlusCircle, Activity } from 'lucide-react';
+import { Calendar, Compass, Layers, ShieldCheck, UserCheck, Download, PlusCircle, Activity, Watch } from 'lucide-react';
 import { AthleteProfile, TrainingPlan } from '../types/triathlon';
 import { downloadIcsFile } from '../utils/icsExporter';
 
@@ -10,6 +10,7 @@ interface NavbarProps {
   plan: TrainingPlan;
   onOpenOnboarding: () => void;
   onOpenProfile: () => void;
+  onOpenGarminSync?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -19,6 +20,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   plan,
   onOpenOnboarding,
   onOpenProfile,
+  onOpenGarminSync,
 }) => {
   const handleExportIcs = () => {
     downloadIcsFile(plan, profile.name);
@@ -101,6 +103,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Quick Actions & Profile */}
           <div className="flex items-center space-x-2">
+            {onOpenGarminSync && (
+              <button
+                onClick={onOpenGarminSync}
+                title="Synchroniser ma montre Garmin (via Intervals.icu / Strava)"
+                className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 rounded-lg transition"
+              >
+                <Watch className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Garmin Sync</span>
+              </button>
+            )}
+
             <button
               onClick={handleExportIcs}
               title="Exporter le plan vers Apple Calendar / Google Calendar (.ics)"

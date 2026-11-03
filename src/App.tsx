@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AthleteProfile, TrainingPlan, Workout, WorkoutStatus, WeeklyDayPreference } from './types/triathlon';
+import { AthleteProfile, GarminActivityMetrics, TrainingPlan, Workout, WorkoutStatus, WeeklyDayPreference } from './types/triathlon';
 import { DEFAULT_ATHLETE_PROFILE } from './data/defaultProfile';
 import { generateTrainingPlan } from './utils/planGenerator';
 import { Navbar } from './components/Navbar';
@@ -11,6 +11,7 @@ import { WorkoutModal } from './components/WorkoutModal';
 import { OnboardingModal } from './components/OnboardingModal';
 import { ProfileSettings } from './components/ProfileSettings';
 import { WeeklyScheduleModal } from './components/WeeklyScheduleModal';
+import { GarminSyncModal } from './components/GarminSyncModal';
 import { Activity, Sparkles, Download, Calendar, Compass, ShieldCheck } from 'lucide-react';
 import { downloadIcsFile } from './utils/icsExporter';
 
@@ -43,6 +44,7 @@ export const App: React.FC = () => {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [isWeeklyScheduleOpen, setIsWeeklyScheduleOpen] = useState<boolean>(false);
+  const [isGarminSyncOpen, setIsGarminSyncOpen] = useState<boolean>(false);
 
   // Check if first visit to prompt onboarding
   useEffect(() => {
@@ -349,6 +351,56 @@ export const App: React.FC = () => {
     handleSaveProfile(updatedProfile);
   };
 
+  // 8. Apply synced Garmin activities to workouts
+  const handleApplySyncedActivities = (
+    updates: { workoutId: string; activity: GarminActivityMetrics }[]
+  ) => {
+    if (updates.length === 0) return;
+
+    const updatesMap = new Map<string, GarminActivityMetrics>();
+    updates.forEach((u) => updatesMap.set(u.workoutId, u.activity));
+
+    const updatedWeeks = plan.weeks.map((week) => ({
+      ...week,
+      workouts: week.workouts.map((wo) => {
+        const matchedActivity = updatesMap.get(wo.id);
+        if (!matchedActivity) return wo;
+        return {
+          ...wo,
+          status: 'completed' as WorkoutStatus,
+          completedDurationMinutes: matchedActivity.durationMinutes,
+          completedDistanceMeters: matchedActivity.distanceMeters,
+          completedRpe: matchedActivity.perceivedRpe || wo.completedRpe || wo.intensityRpe || 6,
+          garminActivity: matchedActivity,
+        };
+      }),
+    }));
+
+    const updatedPlan: TrainingPlan = {
+      ...plan,
+      weeks: updatedWeeks,
+    };
+
+    setPlan(updatedPlan);
+    try {
+      localStorage.setItem('triatrain_training_plan', JSON.stringify(updatedPlan));
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (selectedWorkout && updatesMap.has(selectedWorkout.id)) {
+      const act = updatesMap.get(selectedWorkout.id)!;
+      setSelectedWorkout({
+        ...selectedWorkout,
+        status: 'completed',
+        completedDurationMinutes: act.durationMinutes,
+        completedDistanceMeters: act.distanceMeters,
+        completedRpe: act.perceivedRpe || selectedWorkout.completedRpe || selectedWorkout.intensityRpe || 6,
+        garminActivity: act,
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white">
       {/* Top Navigation */}
@@ -359,6 +411,7 @@ export const App: React.FC = () => {
         plan={plan}
         onOpenOnboarding={() => setIsOnboardingOpen(true)}
         onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenGarminSync={() => setIsGarminSyncOpen(true)}
       />
 
       {/* Main View Container */}
@@ -373,6 +426,7 @@ export const App: React.FC = () => {
             onToggleWorkoutStatus={handleToggleWorkoutStatus}
             onOpenOnboarding={() => setIsOnboardingOpen(true)}
             onOpenWeeklySchedule={() => setIsWeeklyScheduleOpen(true)}
+            onOpenGarminSync={() => setIsGarminSyncOpen(true)}
             onSwapWorkouts={handleSwapWorkouts}
             onAddWorkoutToDay={handleAddWorkoutToDay}
             onDeleteWorkout={handleDeleteWorkout}
@@ -439,6 +493,15 @@ export const App: React.FC = () => {
         onClose={() => setSelectedWorkout(null)}
         onUpdateWorkout={handleUpdateWorkout}
         profile={profile}
+        onOpenGarminSync={() => setIsGarminSyncOpen(true)}
+      />
+
+      <GarminSyncModal
+        isOpen={isGarminSyncOpen}
+        onClose={() => setIsGarminSyncOpen(false)}
+        currentWeek={plan.weeks[currentWeekIndex] || plan.weeks[0]}
+        profile={profile}
+        onApplySyncedActivities={handleApplySyncedActivities}
       />
 
       <OnboardingModal

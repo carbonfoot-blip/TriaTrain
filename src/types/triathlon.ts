@@ -98,6 +98,44 @@ export interface WorkoutStep {
   notes?: string;
 }
 
+export interface GarminActivityMetrics {
+  externalId: string;
+  provider: 'intervals_icu' | 'strava' | 'demo';
+  deviceName?: string;           // Ex: "Garmin Forerunner 965"
+  activityName: string;
+  startDateLocal: string;        // YYYY-MM-DD
+  sport: SportType;
+  rawSportType: string;          // Ex: "Run", "Ride", "Swim"
+  durationMinutes: number;
+  movingTimeSeconds: number;
+  distanceMeters: number;
+  avgHeartRate?: number;
+  maxHeartRate?: number;
+  avgWatts?: number;
+  normalizedWatts?: number;
+  avgCadence?: number;
+  elevationGainMeters?: number;
+  calories?: number;
+  trainingLoadTss?: number;
+  avgPaceOrSpeedFormatted: string; // Ex: "4:58 /km" ou "31.4 km/h" ou "1:52 /100m"
+  perceivedRpe?: number;
+  syncedAt: string;
+}
+
+export type GarminSyncProvider = 'intervals_icu' | 'strava' | 'demo';
+
+export interface GarminBridgeConfig {
+  provider: GarminSyncProvider;
+  intervalsAthleteId: string;    // Ex: "i123456" ou "0"
+  intervalsApiKey: string;       // Clé API personnelle Intervals.icu
+  stravaAccessToken: string;     // Jeton d'accès Strava direct ou rafraîchi
+  stravaClientId?: string;
+  stravaClientSecret?: string;
+  stravaRefreshToken?: string;
+  autoMatchOnOpen?: boolean;
+  lastSyncedAt?: string;
+}
+
 export interface Workout {
   id: string;
   weekNumber: number;
@@ -119,6 +157,7 @@ export interface Workout {
   athleteNotes?: string;
   completedDurationMinutes?: number;
   completedDistanceMeters?: number;
+  garminActivity?: GarminActivityMetrics;
 }
 
 export interface TrainingWeek {
