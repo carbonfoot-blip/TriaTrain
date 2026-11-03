@@ -1,7 +1,6 @@
 import React from 'react';
-import { Calendar, Compass, Layers, ShieldCheck, UserCheck, Download, PlusCircle, Activity, Watch } from 'lucide-react';
+import { Calendar, Compass, Layers, ShieldCheck, PlusCircle, Activity, Watch, Sparkles } from 'lucide-react';
 import { AthleteProfile, TrainingPlan } from '../types/triathlon';
-import { downloadIcsFile } from '../utils/icsExporter';
 
 interface NavbarProps {
   activeTab: 'dashboard' | 'plan' | 'zones' | 'toolkit';
@@ -11,6 +10,7 @@ interface NavbarProps {
   onOpenOnboarding: () => void;
   onOpenProfile: () => void;
   onOpenGarminSync?: () => void;
+  onOpenWhatsNew?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -21,11 +21,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenOnboarding,
   onOpenProfile,
   onOpenGarminSync,
+  onOpenWhatsNew,
 }) => {
-  const handleExportIcs = () => {
-    downloadIcsFile(plan, profile.name);
-  };
-
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -103,10 +100,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Quick Actions & Profile */}
           <div className="flex items-center space-x-2">
+            {onOpenWhatsNew && (
+              <button
+                onClick={onOpenWhatsNew}
+                title="Découvrir les nouveautés de TriaTrain (v1.0 & v1.1)"
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 text-xs font-semibold text-amber-300 bg-amber-950/50 hover:bg-amber-900/70 border border-amber-700/50 rounded-lg transition"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden lg:inline">Nouveautés</span>
+                <span className="text-[10px] font-mono px-1 rounded bg-amber-500/20 text-amber-200">v1.1</span>
+              </button>
+            )}
+
             {onOpenGarminSync && (
               <button
                 onClick={onOpenGarminSync}
-                title="Synchroniser ma montre Garmin (via Intervals.icu / Strava)"
+                title="Synchroniser ma montre Garmin / COROS"
                 className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-700/60 rounded-lg transition"
               >
                 <Watch className="w-3.5 h-3.5 text-emerald-400" />
@@ -115,18 +124,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
 
             <button
-              onClick={handleExportIcs}
-              title="Exporter le plan vers Apple Calendar / Google Calendar (.ics)"
-              className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-white rounded-lg border border-slate-700 transition"
-            >
-              <Download className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Export .ICS</span>
-            </button>
-
-            <button
               onClick={onOpenOnboarding}
               title="Nouveau programme sur-mesure"
-              className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-slate-200 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/60 rounded-lg transition"
+              className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 border border-cyan-800/60 rounded-lg transition"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Nouveau Plan</span>
