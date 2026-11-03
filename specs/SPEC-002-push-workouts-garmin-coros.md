@@ -6,7 +6,7 @@
 
 ## 📌 Métadonnées
 - **ID de la Spécification :** SPEC-002
-- **Statut :** `En cours`
+- **Statut :** `Terminé`
 - **Auteur :** Félix-Antoine Legault
 - **Date de création :** 2026-11-03
 - **Branche Git cible :** `feature/push-workouts-to-watch`
@@ -45,3 +45,4 @@
 - [x] Envoi unitaire (séance) et hebdomadaire (semaine complète) fonctionnel via l'API Intervals.icu (et en mode Simulation).
 - [x] Export local `.FIT` et `.ZWO` fonctionnel sans erreur.
 - [x] `npm.cmd run build` s'exécute avec succès (code de retour 0).
+

@@ -683,3 +683,4 @@ export function downloadFitWorkoutFile(workout: Workout, profile: AthleteProfile
   a.remove();
   URL.revokeObjectURL(url);
 }
+
