@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  Clock, MapPin, CheckCircle2, Circle, Flame, AlertCircle, 
-  ArrowUpRight, ArrowLeftRight, Plus, MoreHorizontal, MoveRight, X, Trash2
+import {
+  Clock,
+  MapPin,
+  CheckCircle2,
+  Circle,
+  ArrowLeftRight,
+  Plus,
+  X,
+  Trash2,
 } from 'lucide-react';
 import { TrainingWeek, Workout, WorkoutStatus } from '../types/triathlon';
 
@@ -32,7 +38,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
     switch (sport) {
       case 'swim':
         return {
-          border: isDone ? 'border-cyan-500/80 bg-cyan-950/40' : 'border-cyan-500/40 bg-slate-900/90 hover:border-cyan-400',
+          border: isDone
+            ? 'border-cyan-500/80 bg-cyan-950/40'
+            : 'border-cyan-500/40 bg-slate-900/90 hover:border-cyan-400',
           badge: 'bg-cyan-950 text-cyan-300 border-cyan-800',
           text: 'text-cyan-400',
           icon: '🏊',
@@ -40,7 +48,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
         };
       case 'bike':
         return {
-          border: isDone ? 'border-amber-500/80 bg-amber-950/40' : 'border-amber-500/40 bg-slate-900/90 hover:border-amber-400',
+          border: isDone
+            ? 'border-amber-500/80 bg-amber-950/40'
+            : 'border-amber-500/40 bg-slate-900/90 hover:border-amber-400',
           badge: 'bg-amber-950 text-amber-300 border-amber-800',
           text: 'text-amber-400',
           icon: '🚴',
@@ -48,7 +58,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
         };
       case 'run':
         return {
-          border: isDone ? 'border-emerald-500/80 bg-emerald-950/40' : 'border-emerald-500/40 bg-slate-900/90 hover:border-emerald-400',
+          border: isDone
+            ? 'border-emerald-500/80 bg-emerald-950/40'
+            : 'border-emerald-500/40 bg-slate-900/90 hover:border-emerald-400',
           badge: 'bg-emerald-950 text-emerald-300 border-emerald-800',
           text: 'text-emerald-400',
           icon: '🏃',
@@ -56,7 +68,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
         };
       case 'brick':
         return {
-          border: isDone ? 'border-purple-500/80 bg-purple-950/40' : 'border-purple-500/40 bg-slate-900/90 hover:border-purple-400',
+          border: isDone
+            ? 'border-purple-500/80 bg-purple-950/40'
+            : 'border-purple-500/40 bg-slate-900/90 hover:border-purple-400',
           badge: 'bg-purple-950 text-purple-300 border-purple-800',
           text: 'text-purple-400',
           icon: '⚡',
@@ -64,7 +78,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
         };
       case 'strength':
         return {
-          border: isDone ? 'border-indigo-500/80 bg-indigo-950/40' : 'border-indigo-500/40 bg-slate-900/90 hover:border-indigo-400',
+          border: isDone
+            ? 'border-indigo-500/80 bg-indigo-950/40'
+            : 'border-indigo-500/40 bg-slate-900/90 hover:border-indigo-400',
           badge: 'bg-indigo-950 text-indigo-300 border-indigo-800',
           text: 'text-indigo-400',
           icon: '💪',
@@ -105,7 +121,6 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                 if (dragOverDay !== dayNum) setDragOverDay(dayNum);
               }}
               onDragLeave={(e) => {
-                // If leaving the container itself
                 if (e.currentTarget.contains(e.relatedTarget as Node)) return;
                 setDragOverDay(null);
               }}
@@ -153,7 +168,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                     onClick={() => onAddWorkoutToDay && onAddWorkoutToDay(dayNum)}
                     className="h-full min-h-[140px] flex flex-col items-center justify-center p-3 text-center rounded-xl border border-dashed border-slate-800/80 hover:border-slate-700 cursor-pointer transition group"
                   >
-                    <span className="text-xl block mb-1 opacity-50 group-hover:opacity-100 transition">💤</span>
+                    <span className="text-xl block mb-1 opacity-50 group-hover:opacity-100 transition">
+                      💤
+                    </span>
                     <span className="text-xs text-slate-500 group-hover:text-slate-300">Repos</span>
                     <span className="text-[10px] text-slate-600 group-hover:text-cyan-400 mt-1 flex items-center space-x-0.5">
                       <Plus className="w-3 h-3" />
@@ -178,8 +195,12 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                           onClick={() => onSelectWorkout(wo)}
                         >
                           <span className="text-lg block mb-1">💤</span>
-                          <div className="text-xs font-semibold text-slate-400">Repos & Récupération</div>
-                          <div className="text-[10px] text-slate-500 mt-1">Régénération musculaire</div>
+                          <div className="text-xs font-semibold text-slate-400">
+                            Repos & Récupération
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-1">
+                            Régénération musculaire
+                          </div>
 
                           <div className="mt-2 flex items-center justify-center space-x-2 pt-2 border-t border-slate-800/60 opacity-0 group-hover:opacity-100 transition">
                             {onSwapWorkouts && (
@@ -215,7 +236,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                         <div className="flex items-center justify-between mb-1.5">
                           <div className="flex items-center space-x-1.5">
                             <span className="text-sm">{style.icon}</span>
-                            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border ${style.badge}`}>
+                            <span
+                              className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border ${style.badge}`}
+                            >
                               {style.name}
                             </span>
                           </div>
@@ -244,7 +267,11 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                                 onToggleWorkoutStatus(wo.id, wo.status);
                               }}
                               className="text-slate-400 hover:text-white p-0.5 rounded transition"
-                              title={wo.status === 'completed' ? 'Marquer comme non fait' : 'Marquer comme validé'}
+                              title={
+                                wo.status === 'completed'
+                                  ? 'Marquer comme non fait'
+                                  : 'Marquer comme validé'
+                              }
                             >
                               {wo.status === 'completed' ? (
                                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -276,9 +303,7 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                             </span>
                           </span>
 
-                          <span className={`font-bold ${style.text}`}>
-                            {wo.targetZone}
-                          </span>
+                          <span className={`font-bold ${style.text}`}>{wo.targetZone}</span>
                         </div>
 
                         {/* Intensity bar */}
@@ -298,6 +323,14 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                           </div>
                         </div>
 
+                        {/* Pushed to Watch (Drills Ready) Indicator */}
+                        {wo.pushedToWatchAt && !wo.garminActivity && (
+                          <div className="mt-2 px-2 py-1 rounded-lg bg-cyan-950/60 border border-cyan-500/30 text-[9px] font-mono text-cyan-300 flex items-center justify-between">
+                            <span>📲 Sur la montre</span>
+                            <span>{wo.steps?.length || 3} drills</span>
+                          </div>
+                        )}
+
                         {/* Garmin Synced Telemetry Mini-Banner */}
                         {wo.garminActivity && (
                           <div className="mt-2 p-1.5 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-[9px] font-mono text-emerald-200 space-y-0.5">
@@ -313,7 +346,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                                   : `${(wo.garminActivity.distanceMeters / 1000).toFixed(1)}k`}
                               </span>
                               {wo.garminActivity.avgHeartRate && (
-                                <span className="text-rose-300">❤️ {wo.garminActivity.avgHeartRate}</span>
+                                <span className="text-rose-300">
+                                  ❤️ {wo.garminActivity.avgHeartRate}
+                                </span>
                               )}
                             </div>
                           </div>
@@ -368,7 +403,8 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
               <div className="p-2 bg-slate-950 rounded-lg text-xs font-semibold text-white border border-slate-800">
                 {activeSwapWorkout.title}
                 <span className="block text-[10px] text-slate-400 font-mono mt-0.5">
-                  Jour actuel : {DAY_NAMES[activeSwapWorkout.dayOfWeek - 1]} (J{activeSwapWorkout.dayOfWeek})
+                  Jour actuel : {DAY_NAMES[activeSwapWorkout.dayOfWeek - 1]} (J
+                  {activeSwapWorkout.dayOfWeek})
                 </span>
               </div>
             </div>
@@ -409,7 +445,9 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
 
             <div className="space-y-2 pt-2 border-t border-slate-800 text-xs text-slate-400">
               <p className="text-[11px] leading-relaxed">
-                💡 En cliquant sur un jour, vous <strong className="text-cyan-400">permuterez (switch)</strong> automatiquement l'entraînement avec celui de ce jour.
+                💡 En cliquant sur un jour, vous{' '}
+                <strong className="text-cyan-400">permuterez (switch)</strong> automatiquement
+                l'entraînement avec celui de ce jour.
               </p>
             </div>
 
