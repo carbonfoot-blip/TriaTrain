@@ -298,6 +298,27 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
                           </div>
                         </div>
 
+                        {/* Garmin Synced Telemetry Mini-Banner */}
+                        {wo.garminActivity && (
+                          <div className="mt-2 p-1.5 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-[9px] font-mono text-emerald-200 space-y-0.5">
+                            <div className="flex items-center justify-between font-bold text-emerald-300">
+                              <span>⌚ Garmin Sync</span>
+                              <span>{wo.garminActivity.avgPaceOrSpeedFormatted}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[8px] text-slate-300">
+                              <span>
+                                {wo.garminActivity.durationMinutes}m •{' '}
+                                {wo.sport === 'swim'
+                                  ? `${wo.garminActivity.distanceMeters}m`
+                                  : `${(wo.garminActivity.distanceMeters / 1000).toFixed(1)}k`}
+                              </span>
+                              {wo.garminActivity.avgHeartRate && (
+                                <span className="text-rose-300">❤️ {wo.garminActivity.avgHeartRate}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Drag indicator & quick actions */}
                         <div className="mt-2 pt-1 border-t border-slate-800/60 flex items-center justify-between text-[9px] text-slate-500">
                           <span className="truncate">Glisser pour déplacer ⇄</span>

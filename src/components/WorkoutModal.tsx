@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Clock, MapPin, Gauge, Flame, CheckCircle, AlertCircle, 
   HelpCircle, MessageSquare, Award, ArrowRight, Activity, Save,
-  RefreshCw, Edit3, Plus, Trash2, Search, Sliders, ChevronRight
+  RefreshCw, Edit3, Plus, Trash2, Search, Sliders, ChevronRight,
+  Watch, Heart, Zap, TrendingUp, Unlink
 } from 'lucide-react';
 import { AthleteProfile, SportType, Workout, WorkoutCategory, WorkoutStatus, WorkoutStep } from '../types/triathlon';
 import { WORKOUT_CATALOG, WorkoutTemplate, instantiateWorkoutFromTemplate } from '../data/workoutCatalog';
@@ -13,6 +14,7 @@ interface WorkoutModalProps {
   onClose: () => void;
   onUpdateWorkout: (updated: Workout) => void;
   profile: AthleteProfile;
+  onOpenGarminSync?: () => void;
 }
 
 export const WorkoutModal: React.FC<WorkoutModalProps> = ({
@@ -21,6 +23,7 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
   onClose,
   onUpdateWorkout,
   profile,
+  onOpenGarminSync,
 }) => {
   if (!isOpen || !workout) return null;
 
@@ -409,6 +412,170 @@ export const WorkoutModal: React.FC<WorkoutModalProps> = ({
                   ))}
                 </ul>
               </div>
+            )}
+
+            {/* Garmin Watch Telemetry Section */}
+            {workout.garminActivity ? (
+              <div className="p-4 bg-gradient-to-br from-emerald-950/50 via-slate-900 to-cyan-950/40 rounded-xl border border-emerald-500/40 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                      <Watch className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h3 className="text-xs font-extrabold text-white uppercase tracking-wider">
+                          Résultats Montre Garmin
+                        </h3>
+                        <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          {workout.garminActivity.provider === 'intervals_icu'
+                            ? 'Intervals.icu'
+                            : workout.garminActivity.provider === 'strava'
+                            ? 'Strava'
+                            : 'Forerunner 965'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 font-medium">
+                        {workout.garminActivity.activityName} • {workout.garminActivity.deviceName || 'Garmin'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUpdateWorkout({
+                        ...workout,
+                        garminActivity: undefined,
+                        completedDurationMinutes: undefined,
+                        completedDistanceMeters: undefined,
+                      });
+                    }}
+                    title="Dissocier cette activité Garmin"
+                    className="text-[11px] text-slate-400 hover:text-rose-400 flex items-center space-x-1 px-2 py-1 rounded hover:bg-slate-800 transition"
+                  >
+                    <Unlink className="w-3 h-3" />
+                    <span>Dissocier</span>
+                  </button>
+                </div>
+
+                {/* Comparison Grid: Planned vs Realized */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Durée réalisée</span>
+                    <span className="text-sm font-extrabold text-emerald-400 font-mono">
+                      {workout.garminActivity.durationMinutes} min
+                    </span>
+                    <span className="text-[10px] text-slate-500 block font-mono">
+                      Prévu : {workout.durationMinutes} min
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Distance réelle</span>
+                    <span className="text-sm font-extrabold text-cyan-400 font-mono">
+                      {workout.sport === 'swim'
+                        ? `${workout.garminActivity.distanceMeters} m`
+                        : `${(workout.garminActivity.distanceMeters / 1000).toFixed(2)} km`}
+                    </span>
+                    <span className="text-[10px] text-slate-500 block font-mono">
+                      Prévu :{' '}
+                      {workout.sport === 'swim'
+                        ? `${workout.distanceMeters} m`
+                        : `${(workout.distanceMeters / 1000).toFixed(1)} km`}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Allure / Vitesse moy.</span>
+                    <span className="text-sm font-extrabold text-white font-mono">
+                      {workout.garminActivity.avgPaceOrSpeedFormatted}
+                    </span>
+                    {workout.garminActivity.avgCadence && (
+                      <span className="text-[10px] text-slate-500 block font-mono">
+                        Cadence : {workout.garminActivity.avgCadence} rpm/spm
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 flex items-center space-x-1">
+                      <Heart className="w-3 h-3 text-rose-400" />
+                      <span>Cardio (Moy / Max)</span>
+                    </span>
+                    <span className="text-sm font-extrabold text-rose-400 font-mono">
+                      {workout.garminActivity.avgHeartRate
+                        ? `${workout.garminActivity.avgHeartRate} bpm`
+                        : '—'}
+                    </span>
+                    {workout.garminActivity.maxHeartRate && (
+                      <span className="text-[10px] text-slate-500 block font-mono">
+                        Max : {workout.garminActivity.maxHeartRate} bpm
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Secondary metrics row: Power, TSS, Elevation, Calories */}
+                <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-mono">
+                  {workout.garminActivity.avgWatts && (
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-800/60 text-amber-300 flex items-center space-x-1">
+                      <Zap className="w-3 h-3 text-amber-400" />
+                      <span>
+                        Puissance : {workout.garminActivity.avgWatts} W
+                        {workout.garminActivity.normalizedWatts
+                          ? ` (NP ${workout.garminActivity.normalizedWatts} W)`
+                          : ''}
+                      </span>
+                    </span>
+                  )}
+                  {workout.garminActivity.trainingLoadTss && (
+                    <span className="px-2.5 py-1 rounded-lg bg-purple-950/60 border border-purple-800/60 text-purple-300 flex items-center space-x-1">
+                      <Flame className="w-3 h-3 text-purple-400" />
+                      <span>Charge : {workout.garminActivity.trainingLoadTss} TSS</span>
+                    </span>
+                  )}
+                  {workout.garminActivity.elevationGainMeters !== undefined &&
+                    workout.garminActivity.elevationGainMeters > 0 && (
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 flex items-center space-x-1">
+                        <TrendingUp className="w-3 h-3 text-cyan-400" />
+                        <span>D+ {workout.garminActivity.elevationGainMeters} m</span>
+                      </span>
+                    )}
+                  {workout.garminActivity.calories && (
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
+                      🔥 {workout.garminActivity.calories} kcal
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              workout.sport !== 'rest' &&
+              onOpenGarminSync && (
+                <div className="p-3.5 bg-slate-900/90 rounded-xl border border-cyan-500/30 flex items-center justify-between gap-3">
+                  <div className="flex items-center space-x-2.5">
+                    <Watch className="w-5 h-5 text-cyan-400 shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-white">
+                        Vous avez réalisé cette sortie avec votre montre Garmin ?
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Importez automatiquement votre FC, allure, puissance et distance réelle.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenGarminSync();
+                    }}
+                    className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500 text-cyan-300 hover:text-slate-950 border border-cyan-500/40 rounded-lg text-xs font-bold transition shrink-0"
+                  >
+                    ⌚ Synchroniser Garmin
+                  </button>
+                </div>
+              )
             )}
 
             {/* Validation & Feedback section */}
