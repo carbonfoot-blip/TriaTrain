@@ -98,6 +98,21 @@ export interface WorkoutStep {
   notes?: string;
 }
 
+export interface WatchStepPreview {
+  stepNumber: number;
+  type: WorkoutStep['type'];
+  watchScreenTitle: string;      // Titre court optimisé écran Garmin/COROS (<= 28 car.)
+  drillCue: string;              // Consigne précise de l'éducatif / exercice
+  durationOrDistanceLabel: string; // Ex: "10:00", "4 × 1000m", "8 × 50m"
+  repeats?: number;
+  durationSeconds: number;
+  distanceMeters?: number;
+  targetZone: 'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5';
+  watchTargetRange: string;      // Ex: "4:45–4:55 /km" ou "195–215 W" ou "148–160 bpm"
+  cadenceOrStrokeCue?: string;   // Ex: "Cadence 90-95 rpm" ou "Crawl rattrapé"
+  intervalsSyntaxLine: string;   // Ligne correspondante pour Intervals.icu / Garmin / COROS
+}
+
 export interface GarminActivityMetrics {
   externalId: string;
   provider: 'intervals_icu' | 'strava' | 'demo';
@@ -158,6 +173,8 @@ export interface Workout {
   completedDurationMinutes?: number;
   completedDistanceMeters?: number;
   garminActivity?: GarminActivityMetrics;
+  pushedToWatchAt?: string;
+  externalEventId?: string;
 }
 
 export interface TrainingWeek {
