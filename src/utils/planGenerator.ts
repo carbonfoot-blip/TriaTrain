@@ -1,34 +1,141 @@
 import { AthleteProfile, TrainingPlan, TrainingWeek, Workout, TrainingPhase, SportType, WorkoutStep, TargetSport } from '../types/triathlon';
 import { calculateAllZones, parsePaceToSeconds, formatSecondsToPace } from './zonesCalculator';
 
-// Helper: add days to a date string YYYY-MM-DD
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
+// Helper: add days to a date string YYYY-MM-DD (UTC-safe noon anchor)
+export function addDays(dateStr: string, days: number): string {
+  const clean = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+  const d = new Date(`${clean}T12:00:00`);
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
-// Get the coming Monday as starting point
-function getNextMonday(): string {
-  const today = new Date();
-  const day = today.getDay();
-  const diff = day === 0 ? 1 : (8 - day) % 7;
-  const nextMon = new Date(today);
-  nextMon.setDate(today.getDate() + (diff === 0 ? 7 : diff));
-  return nextMon.toISOString().split('T')[0];
+/**
+ * Retourne le Lundi (YYYY-MM-DD) de la semaine correspondant à la date fournie (ou de la semaine courante par défaut)
+ */
+export function getMondayOfWeek(dateInput?: string | Date): string {
+  let d: Date;
+  if (!dateInput) {
+    d = new Date();
+    d.setHours(12, 0, 0, 0);
+  } else if (typeof dateInput === 'string') {
+    const clean = dateInput.includes('T') ? dateInput.split('T')[0] : dateInput;
+    d = new Date(`${clean}T12:00:00`);
+    if (isNaN(d.getTime())) {
+      d = new Date();
+      d.setHours(12, 0, 0, 0);
+    }
+  } else {
+    d = new Date(dateInput);
+    d.setHours(12, 0, 0, 0);
+  }
+
+  const day = d.getDay(); // 0 = Dimanche, 1 = Lundi ... 6 = Samedi
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diffToMonday);
+
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Raccourcis pratiques pour choisir la date de début de la Semaine 1 (passé, présent ou futur)
+ */
+export function getStartDatePresets(): {
+  id: string;
+  label: string;
+  sublabel: string;
+  date: string;
+}[] {
+  const thisMonday = getMondayOfWeek();
+  return [
+    {
+      id: 'two_weeks_ago',
+      label: '⏪ Il y a 2 semaines',
+      sublabel: addDays(thisMonday, -14),
+      date: addDays(thisMonday, -14),
+    },
+    {
+      id: 'last_week',
+      label: '⏪ La semaine passée',
+      sublabel: addDays(thisMonday, -7),
+      date: addDays(thisMonday, -7),
+    },
+    {
+      id: 'this_week',
+      label: '📍 Cette semaine (Lundi)',
+      sublabel: thisMonday,
+      date: thisMonday,
+    },
+    {
+      id: 'next_week',
+      label: '⏩ Lundi prochain',
+      sublabel: addDays(thisMonday, 7),
+      date: addDays(thisMonday, 7),
+    },
+  ];
 }
 
 export function calculateWeeksBetween(startDateStr: string, endDateStr: string): number {
-  const start = new Date(startDateStr);
-  const end = new Date(endDateStr);
+  const start = new Date(`${startDateStr.split('T')[0]}T12:00:00`);
+  const end = new Date(`${endDateStr.split('T')[0]}T12:00:00`);
   const diffTime = Math.max(0, end.getTime() - start.getTime());
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   const weeks = Math.max(4, Math.min(24, Math.round(diffDays / 7)));
   return weeks;
 }
 
+/**
+ * Décale toutes les dates d'un plan existant (Semaine 1..N et chaque séance) vers une nouvelle date de début
+ * SANS écraser les séances modifiées ni les activités Garmin déjà synchronisées.
+ */
+export function shiftTrainingPlanStartDate(
+  plan: TrainingPlan,
+  newStartDateStr: string
+): TrainingPlan {
+  const alignedStart = getMondayOfWeek(newStartDateStr);
+
+  const updatedWeeks: TrainingWeek[] = plan.weeks.map((week, idx) => {
+    const wStart = addDays(alignedStart, idx * 7);
+    const wEnd = addDays(wStart, 6);
+
+    const updatedWorkouts = week.workouts.map((wo) => ({
+      ...wo,
+      date: addDays(wStart, (wo.dayOfWeek || 1) - 1),
+    }));
+
+    return {
+      ...week,
+      startDate: wStart,
+      endDate: wEnd,
+      workouts: updatedWorkouts,
+    };
+  });
+
+  return {
+    ...plan,
+    startDate: alignedStart,
+    weeks: updatedWeeks,
+  };
+}
+
+/**
+ * Trouve l'index de la semaine qui correspond à la date d'aujourd'hui (ou 0 par défaut)
+ */
+export function findActiveWeekIndexForToday(plan: TrainingPlan): number {
+  const todayMonday = getMondayOfWeek();
+  const idx = plan.weeks.findIndex((w) => w.startDate === todayMonday);
+  return idx >= 0 ? idx : 0;
+}
+
 export function generateTrainingPlan(profile: AthleteProfile): TrainingPlan {
-  const startDate = getNextMonday();
+  const startDate = profile.raceObjective.startDate
+    ? getMondayOfWeek(profile.raceObjective.startDate)
+    : getMondayOfWeek();
   const targetSport: TargetSport = profile.targetSport || profile.raceObjective.sport || 'triathlon';
   
   // Calculate total weeks
@@ -360,6 +467,7 @@ export function generateTrainingPlan(profile: AthleteProfile): TrainingPlan {
     createdAt: new Date().toISOString(),
     targetSport,
     raceDistance: profile.raceObjective.distance,
+    startDate,
     raceDate: profile.raceObjective.raceDate || addDays(startDate, totalWeeks * 7),
     totalWeeks,
     weeks,

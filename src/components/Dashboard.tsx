@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
-  ChevronLeft, ChevronRight, Calendar, Flag, Award, 
-  Activity, Clock, MapPin, Zap, Flame, CheckCircle, Info, Sparkles, Sliders, Watch
+  ChevronLeft, ChevronRight, Calendar, Award, 
+  Activity, Clock, MapPin, Flame, Sliders, Watch, X, Check
 } from 'lucide-react';
-import { AthleteProfile, TrainingPlan, TrainingWeek, Workout, WorkoutStatus } from '../types/triathlon';
+import { AthleteProfile, TrainingPlan, Workout, WorkoutStatus } from '../types/triathlon';
 import { WeekCalendar } from './WeekCalendar';
+import { getMondayOfWeek, getStartDatePresets } from '../utils/planGenerator';
 
 interface DashboardProps {
   plan: TrainingPlan;
@@ -19,6 +20,7 @@ interface DashboardProps {
   onSwapWorkouts?: (workoutId: string, targetDay: number, mode: 'swap' | 'move') => void;
   onAddWorkoutToDay?: (dayOfWeek: number) => void;
   onDeleteWorkout?: (workoutId: string) => void;
+  onShiftPlanStartDate?: (newStartDateStr: string) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -28,14 +30,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
   setCurrentWeekIndex,
   onSelectWorkout,
   onToggleWorkoutStatus,
-  onOpenOnboarding,
   onOpenWeeklySchedule,
   onOpenGarminSync,
   onSwapWorkouts,
   onAddWorkoutToDay,
   onDeleteWorkout,
+  onShiftPlanStartDate,
 }) => {
   const currentWeek = plan.weeks[currentWeekIndex] || plan.weeks[0];
+  const planWeek1Start = plan.weeks[0]?.startDate || profile.raceObjective.startDate || getMondayOfWeek();
+
+  const [isStartDateEditorOpen, setIsStartDateEditorOpen] = useState<boolean>(false);
+  const [tempStartDate, setTempStartDate] = useState<string>(planWeek1Start);
+  const [shiftSuccessMsg, setShiftSuccessMsg] = useState<string | null>(null);
 
   // Calculate days remaining to race
   const calculateDaysToRace = () => {
@@ -58,6 +65,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const h = Math.floor(totalMinutes / 60);
     const m = totalMinutes % 60;
     return `${h}h${m < 10 ? '0' : ''}${m}`;
+  };
+
+  const handleApplyStartDate = (chosenDate: string) => {
+    if (!onShiftPlanStartDate) return;
+    const aligned = getMondayOfWeek(chosenDate);
+    setTempStartDate(aligned);
+    onShiftPlanStartDate(aligned);
+    setShiftSuccessMsg(`Semaine 1 calée au Lundi ${aligned} !`);
+    setTimeout(() => {
+      setShiftSuccessMsg(null);
+      setIsStartDateEditorOpen(false);
+    }, 1200);
   };
 
   return (
@@ -118,7 +137,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <span className="text-[10px] text-slate-400 block">Date de course</span>
               <span className="text-xs font-semibold text-slate-200">
                 {profile.raceObjective.raceDate
-                  ? new Date(profile.raceObjective.raceDate).toLocaleDateString('fr-FR', {
+                  ? new Date(`${profile.raceObjective.raceDate}T12:00:00`).toLocaleDateString('fr-FR', {
                       day: 'numeric',
                       month: 'long',
                       year: 'numeric',
@@ -166,7 +185,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               >
                 {plan.weeks.map((w, idx) => (
                   <option key={w.weekNumber} value={idx}>
-                    Semaine {w.weekNumber} / {plan.totalWeeks} ({w.phase.toUpperCase()})
+                    Semaine {w.weekNumber} / {plan.totalWeeks} ({w.startDate} • {w.phase.toUpperCase()})
                   </option>
                 ))}
               </select>
@@ -232,17 +251,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Week Calendar */}
       <div className="space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Calendar className="w-5 h-5 text-cyan-400" />
             <h2 className="text-base font-bold text-white">
               Programme de la Semaine {currentWeek.weekNumber}
             </h2>
-            <span className="text-xs text-slate-400 hidden sm:inline font-mono">
+            <span className="text-xs text-slate-400 font-mono">
               ({currentWeek.startDate} au {currentWeek.endDate})
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {onShiftPlanStartDate && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTempStartDate(planWeek1Start);
+                  setIsStartDateEditorOpen(!isStartDateEditorOpen);
+                }}
+                className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 text-xs font-bold rounded-lg transition shadow-sm"
+                title="Modifier la date de début réelle de la Semaine 1 (ex: la semaine passée)"
+              >
+                <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                <span>📅 Début S1 : {planWeek1Start}</span>
+              </button>
+            )}
+
             {onOpenGarminSync && (
               <button
                 type="button"
@@ -266,6 +300,76 @@ export const Dashboard: React.FC<DashboardProps> = ({
             )}
           </div>
         </div>
+
+        {/* Quick inline Start Date Editor Banner */}
+        {isStartDateEditorOpen && onShiftPlanStartDate && (
+          <div className="p-4 rounded-xl bg-slate-900/95 border border-amber-500/40 shadow-xl space-y-3 animate-fadeIn">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center space-x-1.5">
+                  <Calendar className="w-4 h-4 text-amber-400" />
+                  <span>Changer la date de début réelle du programme (Semaine 1)</span>
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Décale toutes les semaines de votre programme (sans perdre vos séances complétées ni vos synchronisations Garmin) pour que la Semaine 1 débute à la date de votre choix (ex: la semaine passée).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStartDateEditorOpen(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+              <div className="flex flex-wrap gap-1.5">
+                {getStartDatePresets().map((preset) => {
+                  const isCurrent = planWeek1Start === preset.date;
+                  return (
+                    <button
+                      key={preset.date}
+                      type="button"
+                      onClick={() => handleApplyStartDate(preset.date)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition border ${
+                        isCurrent
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                          : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                      }`}
+                    >
+                      {preset.label} <span className="text-[10px] opacity-80 font-mono">({preset.date})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="date"
+                  value={tempStartDate}
+                  onChange={(e) => setTempStartDate(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-xs font-mono focus:border-amber-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleApplyStartDate(tempStartDate)}
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold rounded-lg transition"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Appliquer</span>
+                </button>
+              </div>
+            </div>
+
+            {shiftSuccessMsg && (
+              <div className="text-xs font-bold text-emerald-400 flex items-center space-x-1.5 pt-1">
+                <Check className="w-4 h-4" />
+                <span>{shiftSuccessMsg}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <WeekCalendar
           currentWeek={currentWeek}

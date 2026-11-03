@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Save, User, Activity, Gauge, Flame, Download, Upload, RefreshCw, Layers, Heart, Calendar } from 'lucide-react';
 import { AthleteProfile, RaceDistance, RaceGoal, TargetSport, SportType, WorkoutCategory } from '../types/triathlon';
 import { estimateMaxHR } from '../utils/zonesCalculator';
+import { getMondayOfWeek, getStartDatePresets } from '../utils/planGenerator';
 
 interface ProfileSettingsProps {
   isOpen: boolean;
@@ -222,6 +223,67 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                   className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-xs"
                   placeholder="Ex: Marathon de Paris ou Défi Pierre Lavoie"
                 />
+              </div>
+            </div>
+
+            {/* Dates: Start Date of Week 1 & Race Date */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-cyan-300 flex items-center space-x-1">
+                  <Calendar className="w-3 h-3 text-cyan-400" />
+                  <span>Date de début du programme (Semaine 1)</span>
+                </label>
+                <input
+                  type="date"
+                  value={profile.raceObjective.startDate || getMondayOfWeek()}
+                  onChange={(e) => setProfile({
+                    ...profile,
+                    raceObjective: {
+                      ...profile.raceObjective,
+                      startDate: e.target.value ? getMondayOfWeek(e.target.value) : getMondayOfWeek(),
+                    }
+                  })}
+                  className="w-full px-2.5 py-1.5 bg-slate-900 border border-cyan-500/40 rounded text-white text-xs font-mono"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {getStartDatePresets().map((preset) => {
+                    const currentStart = getMondayOfWeek(profile.raceObjective.startDate);
+                    const isActive = currentStart === preset.date;
+                    return (
+                      <button
+                        key={preset.date}
+                        type="button"
+                        onClick={() => setProfile({
+                          ...profile,
+                          raceObjective: { ...profile.raceObjective, startDate: preset.date }
+                        })}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold transition border ${
+                          isActive
+                            ? 'bg-cyan-600 text-white border-cyan-400'
+                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-amber-300">Date de la Course / Objectif</label>
+                <input
+                  type="date"
+                  value={profile.raceObjective.raceDate || ''}
+                  onChange={(e) => setProfile({
+                    ...profile,
+                    raceObjective: { ...profile.raceObjective, raceDate: e.target.value }
+                  })}
+                  className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded text-white text-xs font-mono"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Semaine 1 alignée sur le Lundi ({getMondayOfWeek(profile.raceObjective.startDate)}).
+                </p>
               </div>
             </div>
           </div>

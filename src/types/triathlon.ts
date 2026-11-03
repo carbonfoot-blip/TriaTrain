@@ -66,7 +66,8 @@ export interface AthleteProfile {
     sport: TargetSport;
     distance: RaceDistance;
     raceName: string;
-    raceDate: string; // YYYY-MM-DD
+    startDate?: string; // YYYY-MM-DD (Date de début de la Semaine 1, passé, présent ou futur)
+    raceDate: string;   // YYYY-MM-DD
     goalType: RaceGoal;
     targetTimeHours?: string;
   };
@@ -202,6 +203,7 @@ export interface TrainingPlan {
   createdAt: string;
   targetSport: TargetSport;
   raceDistance: RaceDistance;
+  startDate?: string;
   raceDate: string;
   totalWeeks: number;
   weeks: TrainingWeek[];
