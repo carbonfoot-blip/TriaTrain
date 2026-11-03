@@ -653,3 +653,4 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
     </div>
   );
 };
+
