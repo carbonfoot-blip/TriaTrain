@@ -31,6 +31,14 @@ function formatSecondsToPace(totalSec: number): string {
 
 /**
  * Calcule la plage cible numérique (Allure, Watts ou FC) affichée sur la montre Garmin / COROS
+ * ainsi que la cible au format strict du Workout Builder Intervals.icu.
+ *
+ * IMPORTANT (Règle Intervals.icu) :
+ * - Pour les allures (Run / Swim), la plage doit obligatoirement être écrite de la plus LENTE
+ *   à la plus RAPIDE (ex: "5:45-5:15/km Pace"), car 5:45/km correspond à la vitesse (m/s) basse
+ *   et 5:15/km à la vitesse (m/s) haute.
+ * - Utiliser des valeurs absolues explicites ("5:45-5:15/km Pace", "150-180w", "65-75% HR")
+ *   évite l'erreur "(null-null for 0km)" lorsque les zones ne sont pas configurées dans Intervals.icu.
  */
 export function computeWatchTargetForZone(
   sport: SportType,
@@ -46,31 +54,46 @@ export function computeWatchTargetForZone(
     const vmaSec = parsePaceToSeconds(profile.runMetrics.vmaPaceMinKm, 250);
 
     switch (zone) {
-      case 'Z1':
+      case 'Z1': {
+        const fast = formatSecondsToPace(efSec + 15);
+        const slow = formatSecondsToPace(efSec + 45);
         return {
-          displayRange: `${formatSecondsToPace(efSec + 20)}–${formatSecondsToPace(efSec + 45)} /km`,
-          intervalsTarget: 'Z1 Pace',
+          displayRange: `${fast}–${slow} /km`,
+          intervalsTarget: `${slow}-${fast}/km Pace`,
         };
-      case 'Z2':
+      }
+      case 'Z2': {
+        const fast = formatSecondsToPace(efSec - 10);
+        const slow = formatSecondsToPace(efSec + 15);
         return {
-          displayRange: `${formatSecondsToPace(efSec - 10)}–${formatSecondsToPace(efSec + 15)} /km`,
-          intervalsTarget: 'Z2 Pace',
+          displayRange: `${fast}–${slow} /km`,
+          intervalsTarget: `${slow}-${fast}/km Pace`,
         };
-      case 'Z3':
+      }
+      case 'Z3': {
+        const fast = formatSecondsToPace(maraSec - 8);
+        const slow = formatSecondsToPace(maraSec + 8);
         return {
-          displayRange: `${formatSecondsToPace(maraSec - 8)}–${formatSecondsToPace(maraSec + 8)} /km`,
-          intervalsTarget: 'Z3 Pace',
+          displayRange: `${fast}–${slow} /km`,
+          intervalsTarget: `${slow}-${fast}/km Pace`,
         };
-      case 'Z4':
+      }
+      case 'Z4': {
+        const fast = formatSecondsToPace(threshSec - 6);
+        const slow = formatSecondsToPace(threshSec + 6);
         return {
-          displayRange: `${formatSecondsToPace(threshSec - 6)}–${formatSecondsToPace(threshSec + 6)} /km`,
-          intervalsTarget: 'Z4 Pace',
+          displayRange: `${fast}–${slow} /km`,
+          intervalsTarget: `${slow}-${fast}/km Pace`,
         };
-      case 'Z5':
+      }
+      case 'Z5': {
+        const fast = formatSecondsToPace(vmaSec - 5);
+        const slow = formatSecondsToPace(vmaSec + 5);
         return {
-          displayRange: `${formatSecondsToPace(vmaSec - 5)}–${formatSecondsToPace(vmaSec + 5)} /km`,
-          intervalsTarget: 'Z5 Pace',
+          displayRange: `${fast}–${slow} /km`,
+          intervalsTarget: `${slow}-${fast}/km Pace`,
         };
+      }
     }
   }
 
@@ -88,7 +111,7 @@ export function computeWatchTargetForZone(
     const highW = Math.round(ftp * highPct);
     return {
       displayRange: `${lowW}–${highW} W (${Math.round(lowPct * 100)}-${Math.round(highPct * 100)}% FTP)`,
-      intervalsTarget: `${Math.round(lowPct * 100)}-${Math.round(highPct * 100)}%`,
+      intervalsTarget: `${lowW}-${highW}w`,
     };
   }
 
@@ -101,26 +124,197 @@ export function computeWatchTargetForZone(
       Z4: [-4, 1],
       Z5: [-10, -4],
     };
-    const [minOff, maxOff] = offsets[zone];
+    const [fastOff, slowOff] = offsets[zone];
+    const fast = formatSecondsToPace(cssSec + fastOff);
+    const slow = formatSecondsToPace(cssSec + slowOff);
     return {
-      displayRange: `${formatSecondsToPace(cssSec + minOff)}–${formatSecondsToPace(cssSec + maxOff)} /100m`,
-      intervalsTarget: `${zone} Pace`,
+      displayRange: `${fast}–${slow} /100m`,
+      intervalsTarget: `${slow}-${fast}/100m Pace`,
     };
   }
 
   // Brick / Strength -> Fréquence Cardiaque
   const hrRanges: Record<'Z1' | 'Z2' | 'Z3' | 'Z4' | 'Z5', [number, number]> = {
-    Z1: [0.55, 0.65],
-    Z2: [0.65, 0.75],
-    Z3: [0.75, 0.83],
-    Z4: [0.83, 0.90],
-    Z5: [0.90, 0.98],
+    Z1: [55, 65],
+    Z2: [65, 75],
+    Z3: [75, 83],
+    Z4: [83, 90],
+    Z5: [90, 98],
   };
-  const [lowHr, highHr] = hrRanges[zone];
+  const [lowPct, highPct] = hrRanges[zone];
   return {
-    displayRange: `${Math.round(hrMax * lowHr)}–${Math.round(hrMax * highHr)} bpm`,
-    intervalsTarget: `${zone} HR`,
+    displayRange: `${Math.round((hrMax * lowPct) / 100)}–${Math.round((hrMax * highPct) / 100)} bpm`,
+    intervalsTarget: `${lowPct}-${highPct}% HR`,
   };
+}
+
+/**
+ * Nettoie intégralement le texte d'une étape pour le Workout Builder d'Intervals.icu.
+ *
+ * RÈGLE CRITIQUE INTERVALS.ICU :
+ * Tout nombre suivi de "m", "min", "s", "x", "'", "/km", "W" ou "Z1..Z5" présent dans le libellé
+ * d'une ligne "- ..." est interprété par Intervals.icu comme une durée/distance/cible (ex: "1000m"
+ * est lu comme 1000 MINUTES = 16h40 !).
+ * Le libellé textuel placé avant la durée ne doit donc contenir AUCUN chiffre ni unité.
+ */
+function sanitizeStepLabelForIntervals(
+  name: string,
+  targetDescription: string,
+  stepType: WorkoutStep['type']
+): string {
+  const raw = `${name} ${targetDescription}`
+    // Supprimer le contenu entre parenthèses s'il contient des chiffres (ex: "(4:30/km)", "(189W)", "(R=1'45)")
+    .replace(/\([^)]*\d[^)]*\)/g, ' ')
+    // Supprimer les notations de récupération R=1'45, R=20s, R=2 min, etc.
+    .replace(/\bR\s*=\s*[\d'":\sA-Za-z]+/gi, ' ')
+    // Supprimer les mentions "Allure cible :", "Allure :", "Série clé :", "Partie 1 :"
+    .replace(/\b(?:Allure\s*cible|Allure|Cible|Série\s*clé|Blocs?\s*Allure\s*Cible|Partie\s*\d+)\s*:?/gi, ' ')
+    // Supprimer les codes de zones Z0..Z5
+    .replace(/\bZ[0-5]\b/gi, ' ')
+    // Supprimer toute séquence contenant des chiffres et leurs unités éventuelles (1000m, 15 min, 5:29/km, 4 x, 189W, 90-95 rpm...)
+    .replace(/\d+(?:[:.,'/+-]\d+)*\s*(?:km\/h|\/km|\/100m|\/mi|mtr|min|sec|rpm|spm|ppm|bpm|watts?|km|m|s|w|h|x|×|%|'|")?\b/gi, ' ')
+    // Supprimer les symboles spéciaux ou opérateurs restants
+    .replace(/[@/\\+<>—–=:;•*[\]()-]/g, ' ')
+    .replace(/\b(?:x|×)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (raw.length >= 3) {
+    return raw.slice(0, 48).trim();
+  }
+
+  switch (stepType) {
+    case 'warmup':
+      return 'Echauffement progressif';
+    case 'drill':
+      return 'Educatifs techniques';
+    case 'interval':
+      return 'Serie principale';
+    case 'recovery':
+      return 'Recuperation souple';
+    case 'cooldown':
+    default:
+      return 'Retour au calme';
+  }
+}
+
+interface ParsedRepeatBlock {
+  repeats: number;
+  workDurationOrDistToken: string; // ex: "1000mtr", "30s", "12m"
+  restDurationToken: string; // ex: "1m45s", "30s", "2m"
+  workLabel: string;
+  restLabel: string;
+  workTarget: string;
+  restTarget: string;
+  displayLabel: string;
+}
+
+/**
+ * Extrait une éventuelle structure de répétitions (ex: "4 x 1000m @ Seuil R=1'45",
+ * "8 x (30s Vite / 30s Récup)", "4 x 6 min @ SweetSpot R=2'", "8 x 100m Crawl R=15s")
+ * afin de générer un vrai bloc "Nx" multi-lignes compris par Intervals.icu et Garmin Connect.
+ */
+function parseStepRepeatStructure(
+  step: WorkoutStep,
+  sport: SportType,
+  profile: AthleteProfile
+): ParsedRepeatBlock | null {
+  const combined = `${step.name} ${step.targetDescription}`;
+  const workZone = step.targetZone || 'Z4';
+  const workTarget = computeWatchTargetForZone(sport, workZone, profile).intervalsTarget;
+  const restTarget = computeWatchTargetForZone(sport, 'Z1', profile).intervalsTarget;
+  const workLabel = sanitizeStepLabelForIntervals(step.name, step.targetDescription, step.type);
+  const restLabel = sport === 'swim' ? 'Repos au mur' : 'Recuperation souple';
+
+  // Helper pour extraire R=1'45, R=2', R=30s, R=2 min
+  const extractRecoveryToken = (text: string, fallback: string): string => {
+    const minSecMatch = text.match(/\bR\s*=\s*(\d+)\s*'\s*(\d{1,2})/i);
+    if (minSecMatch) {
+      return `${minSecMatch[1]}m${minSecMatch[2]}s`;
+    }
+    const minQuoteMatch = text.match(/\bR\s*=\s*(\d+)\s*'/i);
+    if (minQuoteMatch) {
+      return `${minQuoteMatch[1]}m`;
+    }
+    const unitMatch = text.match(/\bR\s*=\s*(\d+)\s*(s|sec|min|m)\b/i);
+    if (unitMatch) {
+      const val = unitMatch[1];
+      const u = unitMatch[2].toLowerCase();
+      return u.startsWith('s') ? `${val}s` : `${val}m`;
+    }
+    return fallback;
+  };
+
+  // Cas 1 : "8 x (30s Vite @ VMA / 30s Récup trot)" ou "4 x 45s effort / 15s récup"
+  const dualTimeMatch = combined.match(
+    /(\d+)\s*[x×]\s*\(?(\d+)\s*(s|sec|min|m)\b[^/]*\/\s*(\d+)\s*(s|sec|min|m)\b/i
+  );
+  if (dualTimeMatch) {
+    const repeats = parseInt(dualTimeMatch[1], 10);
+    const workVal = dualTimeMatch[2];
+    const workUnit = dualTimeMatch[3].toLowerCase().startsWith('s') ? 's' : 'm';
+    const restVal = dualTimeMatch[4];
+    const restUnit = dualTimeMatch[5].toLowerCase().startsWith('s') ? 's' : 'm';
+    if (repeats >= 2) {
+      return {
+        repeats,
+        workDurationOrDistToken: `${workVal}${workUnit}`,
+        restDurationToken: `${restVal}${restUnit}`,
+        workLabel,
+        restLabel,
+        workTarget,
+        restTarget,
+        displayLabel: `${repeats} × (${workVal}${workUnit} / ${restVal}${restUnit})`,
+      };
+    }
+  }
+
+  // Cas 2 : Répétitions sur une distance : "4 x 1000m", "3 x 2000m", "8 x 100m", "4 x 80m"
+  const distRepeatMatch = combined.match(/(\d+)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(km|m|mtr)\b/i);
+  if (distRepeatMatch) {
+    const repeats = parseInt(distRepeatMatch[1], 10);
+    const rawNum = parseFloat(distRepeatMatch[2].replace(',', '.'));
+    const unit = distRepeatMatch[3].toLowerCase();
+    const meters = unit === 'km' ? Math.round(rawNum * 1000) : Math.round(rawNum);
+    if (repeats >= 2 && meters > 0) {
+      const defaultRest = sport === 'swim' ? '20s' : meters >= 1000 ? '1m45s' : '45s';
+      const restToken = extractRecoveryToken(combined, defaultRest);
+      return {
+        repeats,
+        // CRITIQUE : Toujours "mtr" pour les mètres dans Intervals.icu (jamais "m" qui veut dire minutes !)
+        workDurationOrDistToken: `${meters}mtr`,
+        restDurationToken: restToken,
+        workLabel,
+        restLabel,
+        workTarget,
+        restTarget: sport === 'swim' ? '50% Pace' : restTarget,
+        displayLabel: `${repeats} × ${meters}m (R=${restToken})`,
+      };
+    }
+  }
+
+  // Cas 3 : Répétitions sur une durée : "3 x 12 min", "4 x 6 min"
+  const timeRepeatMatch = combined.match(/(\d+)\s*[x×]\s*(\d+)\s*(min|m|sec|s)\b/i);
+  if (timeRepeatMatch) {
+    const repeats = parseInt(timeRepeatMatch[1], 10);
+    const val = parseInt(timeRepeatMatch[2], 10);
+    const unit = timeRepeatMatch[3].toLowerCase().startsWith('s') ? 's' : 'm';
+    if (repeats >= 2 && val > 0) {
+      const restToken = extractRecoveryToken(combined, unit === 'm' ? '2m' : '30s');
+      return {
+        repeats,
+        workDurationOrDistToken: `${val}${unit}`,
+        restDurationToken: restToken,
+        workLabel,
+        restLabel,
+        workTarget,
+        restTarget,
+        displayLabel: `${repeats} × ${val}${unit} (R=${restToken})`,
+      };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -207,18 +401,14 @@ export function buildWatchStepsForWorkout(
     const durationSeconds = durationMinutes * 60;
     const zone = step.targetZone || 'Z2';
     const targetInfo = computeWatchTargetForZone(workout.sport, zone, profile);
-
-    // Détection d'un pattern de répétition dans le nom ou la consigne (ex: "6x50m", "4x1000m", "8 x 30s")
-    const repeatDistMatch = `${step.name} ${step.targetDescription}`.match(
-      /(\d+)\s*[x×]\s*(\d+)\s*(m|km|s|sec|min)/i
-    );
+    const repeatBlock = parseStepRepeatStructure(step, workout.sport, profile);
 
     let durationOrDistanceLabel = `${durationMinutes}:00`;
     let repeats = step.repeats;
 
-    if (repeatDistMatch) {
-      repeats = parseInt(repeatDistMatch[1], 10);
-      durationOrDistanceLabel = `${repeatDistMatch[1]} × ${repeatDistMatch[2]}${repeatDistMatch[3]}`;
+    if (repeatBlock) {
+      repeats = repeatBlock.repeats;
+      durationOrDistanceLabel = repeatBlock.displayLabel;
     } else if (step.distanceMeters && step.distanceMeters > 0) {
       durationOrDistanceLabel =
         step.distanceMeters >= 1000 && workout.sport !== 'swim'
@@ -226,12 +416,21 @@ export function buildWatchStepsForWorkout(
           : `${step.distanceMeters} m`;
     }
 
-    const cleanStepNote = `${step.name} — ${step.targetDescription}`
-      .replace(/[-•]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+    const cleanLabel = sanitizeStepLabelForIntervals(
+      step.name,
+      step.targetDescription,
+      step.type
+    );
 
-    const intervalsSyntaxLine = `- ${cleanStepNote} ${durationMinutes}m ${targetInfo.intervalsTarget}`;
+    // Pour une étape simple : utiliser "mtr" si c'est une distance de natation, sinon "m" (minutes)
+    const stepDurationOrDistToken =
+      workout.sport === 'swim' && step.distanceMeters && step.distanceMeters > 0
+        ? `${step.distanceMeters}mtr`
+        : `${durationMinutes}m`;
+
+    const intervalsSyntaxLine = repeatBlock
+      ? `${repeatBlock.repeats}x\n- ${repeatBlock.workLabel} ${repeatBlock.workDurationOrDistToken} ${repeatBlock.workTarget}\n- ${repeatBlock.restLabel} ${repeatBlock.restDurationToken} ${repeatBlock.restTarget}`
+      : `- ${cleanLabel} ${stepDurationOrDistToken} ${targetInfo.intervalsTarget}`;
 
     return {
       stepNumber: idx + 1,
@@ -258,16 +457,57 @@ export function generateIntervalsStructuredWorkoutText(
   workout: Workout,
   profile: AthleteProfile
 ): string {
-  const watchSteps = buildWatchStepsForWorkout(workout, profile);
+  const rawSteps: WorkoutStep[] =
+    workout.steps && workout.steps.length > 0
+      ? workout.steps
+      : [
+          {
+            type: 'warmup',
+            name: 'Échauffement progressif',
+            durationMinutes: Math.max(5, Math.round(workout.durationMinutes * 0.2)),
+            targetZone: 'Z1',
+            targetDescription: 'Mise en route souple',
+          },
+          {
+            type: 'interval',
+            name: workout.title,
+            durationMinutes: Math.max(10, Math.round(workout.durationMinutes * 0.65)),
+            targetZone: (workout.targetZone as WorkoutStep['targetZone']) || 'Z2',
+            targetDescription: workout.description,
+          },
+          {
+            type: 'cooldown',
+            name: 'Retour au calme',
+            durationMinutes: Math.max(5, Math.round(workout.durationMinutes * 0.15)),
+            targetZone: 'Z1',
+            targetDescription: 'Relâchement complet',
+          },
+        ];
 
-  const warmups = watchSteps.filter((s) => s.type === 'warmup');
-  const mainAndDrills = watchSteps.filter(
+  const warmups = rawSteps.filter((s) => s.type === 'warmup');
+  const mainAndDrills = rawSteps.filter(
     (s) => s.type === 'drill' || s.type === 'interval' || s.type === 'recovery'
   );
-  const cooldowns = watchSteps.filter((s) => s.type === 'cooldown');
+  const cooldowns = rawSteps.filter((s) => s.type === 'cooldown');
+
+  const formatSingleStepLine = (step: WorkoutStep): string => {
+    const durationMinutes = step.durationMinutes || 5;
+    const zone = step.targetZone || 'Z2';
+    const targetInfo = computeWatchTargetForZone(workout.sport, zone, profile);
+    const cleanLabel = sanitizeStepLabelForIntervals(
+      step.name,
+      step.targetDescription,
+      step.type
+    );
+    const token =
+      workout.sport === 'swim' && step.distanceMeters && step.distanceMeters > 0
+        ? `${step.distanceMeters}mtr`
+        : `${durationMinutes}m`;
+    return `- ${cleanLabel} ${token} ${targetInfo.intervalsTarget}`;
+  };
 
   const lines: string[] = [];
-  lines.push(`${workout.description}`);
+  lines.push(workout.description);
   if (workout.coachTips && workout.coachTips.length > 0) {
     lines.push(`Coach TriaTrain : ${workout.coachTips[0]}`);
   }
@@ -275,22 +515,71 @@ export function generateIntervalsStructuredWorkoutText(
 
   if (warmups.length > 0) {
     lines.push('Warmup');
-    warmups.forEach((s) => lines.push(s.intervalsSyntaxLine));
+    warmups.forEach((step) => {
+      const rep = parseStepRepeatStructure(step, workout.sport, profile);
+      if (rep) {
+        lines.push('');
+        lines.push(`${rep.repeats}x`);
+        lines.push(`- ${rep.workLabel} ${rep.workDurationOrDistToken} ${rep.workTarget}`);
+        lines.push(`- ${rep.restLabel} ${rep.restDurationToken} ${rep.restTarget}`);
+        lines.push('');
+      } else {
+        lines.push(formatSingleStepLine(step));
+      }
+    });
     lines.push('');
   }
 
   if (mainAndDrills.length > 0) {
-    lines.push('Main Set');
-    mainAndDrills.forEach((s) => lines.push(s.intervalsSyntaxLine));
-    lines.push('');
+    // Si le Main Set ne contient qu'une seule étape et que c'est un bloc de répétitions,
+    // on écrit directement "Main Set Nx" (syntaxe officielle Intervals.icu la plus propre)
+    if (mainAndDrills.length === 1) {
+      const onlyStep = mainAndDrills[0];
+      const rep = parseStepRepeatStructure(onlyStep, workout.sport, profile);
+      if (rep) {
+        lines.push(`Main Set ${rep.repeats}x`);
+        lines.push(`- ${rep.workLabel} ${rep.workDurationOrDistToken} ${rep.workTarget}`);
+        lines.push(`- ${rep.restLabel} ${rep.restDurationToken} ${rep.restTarget}`);
+        lines.push('');
+      } else {
+        lines.push('Main Set');
+        lines.push(formatSingleStepLine(onlyStep));
+        lines.push('');
+      }
+    } else {
+      let hasOpenMainSetHeader = false;
+      mainAndDrills.forEach((step) => {
+        const rep = parseStepRepeatStructure(step, workout.sport, profile);
+        if (rep) {
+          lines.push('');
+          lines.push(`Main Set ${rep.repeats}x`);
+          lines.push(`- ${rep.workLabel} ${rep.workDurationOrDistToken} ${rep.workTarget}`);
+          lines.push(`- ${rep.restLabel} ${rep.restDurationToken} ${rep.restTarget}`);
+          lines.push('');
+          hasOpenMainSetHeader = false;
+        } else {
+          if (!hasOpenMainSetHeader) {
+            lines.push('Main Set');
+            hasOpenMainSetHeader = true;
+          }
+          lines.push(formatSingleStepLine(step));
+        }
+      });
+      lines.push('');
+    }
   }
 
   if (cooldowns.length > 0) {
     lines.push('Cooldown');
-    cooldowns.forEach((s) => lines.push(s.intervalsSyntaxLine));
+    cooldowns.forEach((step) => {
+      lines.push(formatSingleStepLine(step));
+    });
   }
 
-  return lines.join('\n').trim();
+  return lines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function mapTriaTrainSportToIntervalsType(sport: SportType): string {
@@ -308,6 +597,84 @@ function mapTriaTrainSportToIntervalsType(sport: SportType): string {
     default:
       return 'Workout';
   }
+}
+
+/**
+ * Synchronise automatiquement les seuils (Threshold Pace en m/s, Zones d'allure, FTP, FC Max)
+ * du profil TriaTrain vers les Sport Settings d'Intervals.icu afin que l'affichage du graphique
+ * et la résolution des étapes Garmin Connect ne tombent jamais sur "(null-null for 0km)".
+ */
+async function syncAthleteThresholdsToIntervals(
+  athleteId: string,
+  authToken: string,
+  profile: AthleteProfile
+): Promise<void> {
+  const threshSec = parsePaceToSeconds(profile.runMetrics.thresholdPaceMinKm, 290);
+  const runThresholdMetersPerSec = Number((1000 / Math.max(150, threshSec)).toFixed(4));
+
+  const cssSec = parsePaceToSeconds(profile.swimMetrics.cssPacePer100m, 120);
+  const swimThresholdMetersPerSec = Number((100 / Math.max(50, cssSec)).toFixed(4));
+
+  const ftp = profile.bikeMetrics.ftpWatts || 210;
+  const maxHr = profile.hrMax || 186;
+  const lthr = Math.round(maxHr * 0.88);
+
+  const defaultPaceZones = [77.5, 87.7, 94.3, 100.0, 103.4, 111.5, 999.0];
+  const defaultPaceZoneNames = [
+    'Zone 1',
+    'Zone 2',
+    'Zone 3',
+    'Zone 4',
+    'Zone 5a',
+    'Zone 5b',
+    'Zone 5c',
+  ];
+
+  const headers = {
+    Authorization: `Basic ${authToken}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  const baseUrl = `https://intervals.icu/api/v1/athlete/${encodeURIComponent(
+    athleteId
+  )}/sport-settings`;
+
+  await Promise.allSettled([
+    fetch(`${baseUrl}/Run`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        threshold_pace: runThresholdMetersPerSec,
+        pace_units: 'MINS_KM',
+        pace_zones: defaultPaceZones,
+        pace_zone_names: defaultPaceZoneNames,
+        max_hr: maxHr,
+        lthr,
+      }),
+    }),
+    fetch(`${baseUrl}/Ride`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        ftp,
+        max_hr: maxHr,
+        lthr,
+      }),
+    }),
+    fetch(`${baseUrl}/Swim`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        threshold_pace: swimThresholdMetersPerSec,
+        pace_units: 'SECS_100M',
+        pace_zones: defaultPaceZones,
+        pace_zone_names: defaultPaceZoneNames,
+        max_hr: maxHr,
+        lthr,
+      }),
+    }),
+  ]);
 }
 
 export interface PushWatchResponse {
@@ -338,14 +705,23 @@ export async function pushWorkoutsToWatch(
     const athleteId = config.intervalsAthleteId.trim() || '0';
     const authToken = btoa(`API_KEY:${apiKey}`);
 
+    // 1. Calibrer automatiquement les seuils (Run / Ride / Swim) dans Intervals.icu
+    // pour éviter toute résolution "(null-null for 0km)"
+    try {
+      await syncAthleteThresholdsToIntervals(athleteId, authToken, profile);
+    } catch {
+      // Non bloquant si les sport-settings ne sont pas modifiables
+    }
+
+    // 2. Construire le payload d'événements WORKOUT sans surcharger moving_time/distance
+    // afin qu'Intervals.icu calcule exactement la durée, la distance et les Steps Garmin Connect
+    // depuis les étapes structurées de "description".
     const payload = validWorkouts.map((wo) => ({
       category: 'WORKOUT',
       start_date_local: `${wo.date}T08:00:00`,
       type: mapTriaTrainSportToIntervalsType(wo.sport),
       name: `[TriaTrain] ${wo.title}`,
       description: generateIntervalsStructuredWorkoutText(wo, profile),
-      moving_time: wo.durationMinutes * 60,
-      distance: wo.distanceMeters > 0 ? wo.distanceMeters : undefined,
       external_id: `triatrain_${wo.id}`,
     }));
 
@@ -649,9 +1025,9 @@ export function downloadFitWorkoutFile(workout: Workout, profile: AthleteProfile
 
   totalBuffer[0] = 14; // Header size
   totalBuffer[1] = 0x10; // Protocol version 1.0
-  const profileVersion = 2132;
-  totalBuffer[2] = profileVersion & 0xff;
-  totalBuffer[3] = (profileVersion >> 8) & 0xff;
+  const profileVer = 2116;
+  totalBuffer[2] = profileVer & 0xff;
+  totalBuffer[3] = (profileVer >> 8) & 0xff;
   totalBuffer[4] = dataSize & 0xff;
   totalBuffer[5] = (dataSize >> 8) & 0xff;
   totalBuffer[6] = (dataSize >> 16) & 0xff;
@@ -660,6 +1036,7 @@ export function downloadFitWorkoutFile(workout: Workout, profile: AthleteProfile
   totalBuffer[9] = 0x46; // 'F'
   totalBuffer[10] = 0x49; // 'I'
   totalBuffer[11] = 0x54; // 'T'
+
   const headerCrc = computeFitCrc16(totalBuffer, 12);
   totalBuffer[12] = headerCrc & 0xff;
   totalBuffer[13] = (headerCrc >> 8) & 0xff;
@@ -683,4 +1060,3 @@ export function downloadFitWorkoutFile(workout: Workout, profile: AthleteProfile
   a.remove();
   URL.revokeObjectURL(url);
 }
-
