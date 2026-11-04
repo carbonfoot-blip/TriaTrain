@@ -14,3 +14,4 @@ L'utilisateur souhaite qu'à l'ouverture, TriaTrain affiche automatiquement le p
    - Recalcule `findActiveWeekIndex` lors de la sauvegarde du profil (`handleSaveProfile`), du décalage de la date de départ (`handleShiftPlanStartDate`) et de la restauration Cloud (`handleRestoreCloudSnapshot`).
 3. **Badge « Aujourd'hui » en heure locale dans `src/components/WeekCalendar.tsx`** :
    - Utilise `getLocalTodayIso()` pour éviter le basculement au lendemain à 19h/20h (heure du Québec).
+
