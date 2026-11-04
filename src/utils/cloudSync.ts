@@ -310,3 +310,4 @@ export async function pullStateFromIntervalsCloud(
   setLastCloudSyncTimestamp(snapshot.updatedAt || new Date().toISOString());
   return snapshot;
 }
+

@@ -20,3 +20,4 @@
   - Masquage automatique du formulaire d'API Key lorsqu'elle est déjà renseignée (remplacé par un bandeau compact `🟢 Connecté à Intervals.icu` et un bouton `Modifier dans Profil`).
 - **`src/components/Navbar.tsx`, `src/components/Dashboard.tsx`, `src/components/WeekCalendar.tsx`** :
   - Barre de navigation mobile fixe en bas d'écran (`Bottom Tab Bar`), filtre mobile rapide sur la semaine et jours de repos compacts sur iPhone.
+
