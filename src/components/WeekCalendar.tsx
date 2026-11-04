@@ -35,7 +35,10 @@ export const WeekCalendar: React.FC<WeekCalendarProps> = ({
   const [activeSwapWorkout, setActiveSwapWorkout] = useState<Workout | null>(null);
   const [mobileFilter, setMobileFilter] = useState<'all' | 'active_only'>('all');
 
-  const todayIso = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
 
   const getSportStyle = (sport: string, status: WorkoutStatus) => {
     const isDone = status === 'completed';
