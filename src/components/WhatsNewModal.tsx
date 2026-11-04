@@ -1,5 +1,17 @@
 import React from 'react';
-import { X, Sparkles, Calendar, Watch, UploadCloud, RefreshCw, Activity, Compass, Layers, CheckCircle2 } from 'lucide-react';
+import {
+  X,
+  Sparkles,
+  Calendar,
+  UploadCloud,
+  RefreshCw,
+  Activity,
+  Compass,
+  Layers,
+  CheckCircle2,
+  Smartphone,
+  Cloud,
+} from 'lucide-react';
 
 interface WhatsNewModalProps {
   isOpen: boolean;
@@ -22,7 +34,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
               <div className="flex items-center space-x-2">
                 <h3 className="text-base font-extrabold text-white">Nouveautés & Versions de TriaTrain</h3>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700/60">
-                  v1.1 Actuelle
+                  v1.2 Actuelle
                 </span>
               </div>
               <p className="text-xs text-slate-400">Historique des fonctionnalités et améliorations de votre coach d'entraînement</p>
@@ -39,6 +51,53 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
 
         {/* Content */}
         <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
+          {/* VERSION 1.2 */}
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/30 border border-emerald-500/40 shadow-lg space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider">
+                  Version 1.2
+                </span>
+                <span className="text-sm font-bold text-white">
+                  Expérience Mobile (iPhone) & Synchronisation Cloud (iPhone ↔ PC)
+                </span>
+              </div>
+              <span className="text-xs font-mono text-emerald-300 bg-emerald-950/70 px-2.5 py-0.5 rounded border border-emerald-800/60">
+                4 novembre 2026
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start space-x-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0 mt-0.5">
+                  <Cloud className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">
+                    1. Synchronisation Cloud Multi-Appareils (Push / Pull via Intervals.icu)
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                    Sauvegardez et récupérez l'intégralité de votre profil, votre programme, vos réglages et tous vos résultats de séances entre votre <strong>iPhone</strong> et votre <strong>PC</strong> en utilisant simplement votre ID + Clé API Intervals.icu (sans aucun compte supplémentaire à créer).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shrink-0 mt-0.5">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">
+                    2. Centre de Configuration Unifié dans « Profil » & Ergonomie Mobile iPhone
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                    Toute la configuration (Objectif, FC & Allures, Semaine Type, Clé Garmin / Intervals.icu) est désormais regroupée dans <strong>Profil</strong>. Une fois la clé configurée, la fenêtre de synchronisation montre va droit au but, avec une barre de navigation fixe en bas d'écran sur iPhone et des cartes de repos compactes.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* VERSION 1.1 */}
           <div className="relative p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/30 border border-cyan-500/40 shadow-lg space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
@@ -172,4 +231,3 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
     </div>
   );
 };
-
