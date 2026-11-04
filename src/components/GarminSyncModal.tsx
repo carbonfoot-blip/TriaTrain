@@ -13,7 +13,6 @@ import {
   MapPin,
   Flame,
   Link2,
-  Sparkles,
   ShieldCheck,
   HelpCircle,
   Send,
@@ -21,6 +20,9 @@ import {
   Upload,
   ChevronDown,
   ChevronUp,
+  Settings,
+  CloudUpload,
+  CloudDownload,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -28,6 +30,7 @@ import {
   GarminActivityMetrics,
   GarminBridgeConfig,
   GarminSyncProvider,
+  TrainingPlan,
   TrainingWeek,
   Workout,
 } from '../types/triathlon';
@@ -45,14 +48,23 @@ import {
   downloadZwoWorkoutFile,
   pushWorkoutsToWatch,
 } from '../utils/workoutWatchExporter';
+import {
+  pushStateToIntervalsCloud,
+  pullStateFromIntervalsCloud,
+  TriaTrainCloudSnapshot,
+} from '../utils/cloudSync';
 
 interface GarminSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentWeek: TrainingWeek;
   profile: AthleteProfile;
+  plan?: TrainingPlan;
+  currentWeekIndex?: number;
   onApplySyncedActivities: (updates: { workoutId: string; activity: GarminActivityMetrics }[]) => void;
   onMarkWorkoutsPushedToWatch?: (workoutIds: string[], timestamp: string) => void;
+  onOpenProfileConnections?: () => void;
+  onRestoreCloudSnapshot?: (snapshot: TriaTrainCloudSnapshot) => void;
 }
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -62,8 +74,12 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
   onClose,
   currentWeek,
   profile,
+  plan,
+  currentWeekIndex = 0,
   onApplySyncedActivities,
   onMarkWorkoutsPushedToWatch,
+  onOpenProfileConnections,
+  onRestoreCloudSnapshot,
 }) => {
   // Direction Mode: 'push_to_watch' | 'pull_results'
   const [syncDirection, setSyncDirection] = useState<'push_to_watch' | 'pull_results'>(
@@ -71,9 +87,11 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
   );
 
   const [config, setConfig] = useState<GarminBridgeConfig>(() => loadGarminConfig());
+  const [showInlineConfig, setShowInlineConfig] = useState<boolean>(false);
   const [activities, setActivities] = useState<GarminActivityMetrics[]>([]);
   const [selectedMatches, setSelectedMatches] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isCloudBusy, setIsCloudBusy] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
   const [showHelpGuide, setShowHelpGuide] = useState<boolean>(false);
@@ -85,6 +103,12 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      const freshCfg = loadGarminConfig();
+      setConfig(freshCfg);
+      const isAlreadyConfigured =
+        (freshCfg.provider === 'intervals_icu' && freshCfg.intervalsApiKey.trim().length > 0) ||
+        (freshCfg.provider === 'strava' && freshCfg.stravaAccessToken.trim().length > 0);
+      setShowInlineConfig(!isAlreadyConfigured);
       setOldestDate(currentWeek.startDate);
       setNewestDate(currentWeek.endDate);
       setErrorMsg(null);
@@ -93,6 +117,10 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
   }, [isOpen, currentWeek]);
 
   if (!isOpen) return null;
+
+  const isConfigured =
+    (config.provider === 'intervals_icu' && config.intervalsApiKey.trim().length > 0) ||
+    (config.provider === 'strava' && config.stravaAccessToken.trim().length > 0);
 
   const handleProviderChange = (provider: GarminSyncProvider) => {
     const nextConfig: GarminBridgeConfig = { ...config, provider };
@@ -188,6 +216,41 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
     }
   };
 
+  const handleQuickCloudPush = async () => {
+    if (!plan) return;
+    setIsCloudBusy(true);
+    setErrorMsg(null);
+    setSyncSuccessMsg(null);
+    try {
+      const res = await pushStateToIntervalsCloud(config, profile, plan, currentWeekIndex);
+      setSyncSuccessMsg(
+        `☁️ Sauvegarde Cloud réussie (${new Date(res.updatedAt).toLocaleTimeString('fr-FR')}) ! Ouvrez TriaTrain sur votre PC ou iPhone et cliquez sur "Pull Cloud" pour tout retrouver.`
+      );
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Erreur sauvegarde Cloud.');
+    } finally {
+      setIsCloudBusy(false);
+    }
+  };
+
+  const handleQuickCloudPull = async () => {
+    if (!onRestoreCloudSnapshot) return;
+    setIsCloudBusy(true);
+    setErrorMsg(null);
+    setSyncSuccessMsg(null);
+    try {
+      const snapshot = await pullStateFromIntervalsCloud(config);
+      onRestoreCloudSnapshot(snapshot);
+      setSyncSuccessMsg(
+        `📥 Profil, programme (${snapshot.plan.totalWeeks} sem.) et résultats restaurés depuis le Cloud !`
+      );
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Erreur récupération Cloud.');
+    } finally {
+      setIsCloudBusy(false);
+    }
+  };
+
   const handleApplySingle = (activity: GarminActivityMetrics) => {
     const targetWorkoutId = selectedMatches[activity.externalId];
     if (!targetWorkoutId) return;
@@ -245,25 +308,25 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden my-4 sm:my-8">
         {/* Header */}
-        <div className="p-5 bg-gradient-to-r from-cyan-950/60 via-slate-900 to-emerald-950/40 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-cyan-950/60 via-slate-900 to-emerald-950/40 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-inner">
-              <Watch className="w-6 h-6" />
+            <div className="p-2 sm:p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-400 shadow-inner">
+              <Watch className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-base sm:text-lg font-extrabold text-white">
-                  Centre Montre Garmin & COROS
+                <h2 className="text-sm sm:text-lg font-extrabold text-white">
+                  Montre Garmin / COROS & Cloud
                 </h2>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 hidden sm:inline">
                   Bidirectionnel
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
-                Poussez vos séances & drills vers la montre avant l'effort, ou importez vos résultats après la sortie
+              <p className="text-[11px] sm:text-xs text-slate-400">
+                Poussez vos séances vers la montre, importez vos sorties ou synchronisez iPhone ↔ PC
               </p>
             </div>
           </div>
@@ -276,8 +339,92 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
           </button>
         </div>
 
+        {/* Compact Connection Status Bar (Hides bulky API key config once configured!) */}
+        <div className="px-4 sm:px-6 pt-3 bg-slate-900">
+          <div className="p-2.5 sm:p-3 rounded-xl bg-slate-950/90 border border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center space-x-2">
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  isConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                }`}
+              />
+              <div className="text-xs">
+                {config.provider === 'intervals_icu' && isConfigured ? (
+                  <span className="font-bold text-emerald-300">
+                    Connecté : Intervals.icu{' '}
+                    <span className="text-slate-400 font-mono text-[11px]">
+                      (ID: {config.intervalsAthleteId || '0'})
+                    </span>
+                  </span>
+                ) : config.provider === 'strava' && isConfigured ? (
+                  <span className="font-bold text-amber-300">Connecté : Strava API</span>
+                ) : (
+                  <span className="font-bold text-amber-300">
+                    Mode Simulation (Configurez votre clé dans Profil pour Garmin / Cloud)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Quick Cloud Push/Pull buttons when Intervals.icu is configured */}
+              {config.provider === 'intervals_icu' && isConfigured && (
+                <>
+                  {plan && (
+                    <button
+                      type="button"
+                      disabled={isCloudBusy}
+                      onClick={handleQuickCloudPush}
+                      title="Sauvegarder mon programme et mes résultats vers le Cloud (pour les retrouver sur PC / iPhone)"
+                      className="px-2.5 py-1 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold flex items-center space-x-1 transition disabled:opacity-50"
+                    >
+                      <CloudUpload className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Push Cloud</span>
+                    </button>
+                  )}
+                  {onRestoreCloudSnapshot && (
+                    <button
+                      type="button"
+                      disabled={isCloudBusy}
+                      onClick={handleQuickCloudPull}
+                      title="Récupérer mon programme et mes résultats depuis le Cloud"
+                      className="px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center space-x-1 transition disabled:opacity-50"
+                    >
+                      <CloudDownload className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Pull Cloud</span>
+                    </button>
+                  )}
+                </>
+              )}
+
+              {onOpenProfileConnections ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenProfileConnections();
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center space-x-1 transition"
+                >
+                  <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{isConfigured ? 'Modifier dans Profil' : 'Configurer dans Profil'}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowInlineConfig(!showInlineConfig)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center space-x-1 transition"
+                >
+                  <Settings className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{showInlineConfig ? 'Masquer config' : 'Connexion'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Direction Switcher: Push Plan/Drills TO Watch vs Pull Results FROM Watch */}
-        <div className="grid grid-cols-2 gap-2 px-6 pt-4 bg-slate-900">
+        <div className="grid grid-cols-2 gap-2 px-4 sm:px-6 pt-3 bg-slate-900">
           <button
             type="button"
             onClick={() => {
@@ -285,14 +432,14 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
               setErrorMsg(null);
               setSyncSuccessMsg(null);
             }}
-            className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-2 border ${
+            className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-1.5 border ${
               syncDirection === 'push_to_watch'
                 ? 'bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-300 border-emerald-500/50 shadow-md'
                 : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
             }`}
           >
-            <Send className="w-4 h-4 text-emerald-400" />
-            <span>📤 Pousser Plan & Drills (TriaTrain → Montre)</span>
+            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+            <span className="truncate">📤 Pousser vers Montre</span>
           </button>
 
           <button
@@ -302,234 +449,163 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
               setErrorMsg(null);
               setSyncSuccessMsg(null);
             }}
-            className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-2 border ${
+            className={`py-2.5 px-3 rounded-xl text-xs font-extrabold transition flex items-center justify-center space-x-1.5 border ${
               syncDirection === 'pull_results'
                 ? 'bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-300 border-cyan-500/50 shadow-md'
                 : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-white'
             }`}
           >
-            <Upload className="w-4 h-4 text-cyan-400" />
-            <span>📥 Importer Résultats (Montre → TriaTrain)</span>
+            <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0" />
+            <span className="truncate">📥 Importer Sorties</span>
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 max-h-[68vh] overflow-y-auto space-y-5">
-          {/* Provider Selector */}
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-              1. Passerelle de connexion (Garmin Connect & COROS Training Hub)
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <button
-                type="button"
-                onClick={() => handleProviderChange('intervals_icu')}
-                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between ${
-                  config.provider === 'intervals_icu'
-                    ? 'bg-cyan-950/60 border-cyan-500 text-white shadow-md shadow-cyan-500/10'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-cyan-300">⚡ Intervals.icu</span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                    Garmin + COROS
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Synchronise les entraînements structurés & résultats avec Garmin et COROS sans fil.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleProviderChange('strava')}
-                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between ${
-                  config.provider === 'strava'
-                    ? 'bg-amber-950/50 border-amber-500 text-white shadow-md shadow-amber-500/10'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-400">🟠 Strava API</span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Import Résultats
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Récupère vos sorties enregistrées sur Strava (pour l'envoi vers montre, utilisez Intervals.icu ou .FIT).
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleProviderChange('demo')}
-                className={`p-3 rounded-xl border text-left transition flex flex-col justify-between ${
-                  config.provider === 'demo'
-                    ? 'bg-emerald-950/50 border-emerald-500 text-white shadow-md shadow-emerald-500/10'
-                    : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-emerald-400">⌚ Mode Simulation</span>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Test 1-clic
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Teste l'envoi des drills et l'import de sorties sans clé API.
-                </p>
-              </button>
-            </div>
-          </div>
-
-          {/* Configuration Panel for Selected Provider */}
-          {config.provider === 'intervals_icu' && (
-            <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
+        <div className="p-4 sm:p-6 max-h-[68vh] overflow-y-auto space-y-4">
+          {/* Collapsible Inline Config (Only shown if not configured yet or user explicitly toggled it) */}
+          {showInlineConfig && (
+            <div className="p-4 rounded-xl bg-slate-950/90 border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2 text-xs font-bold text-cyan-400">
-                  <Key className="w-4 h-4" />
-                  <span>Identifiants Intervals.icu (liés à Garmin Connect / COROS)</span>
-                </div>
+                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Configuration de la passerelle (Garmin / COROS)
+                </label>
+                {isConfigured && (
+                  <button
+                    type="button"
+                    onClick={() => setShowInlineConfig(false)}
+                    className="text-[11px] text-slate-400 hover:text-white underline"
+                  >
+                    Masquer (déjà configuré)
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowHelpGuide(!showHelpGuide)}
-                  className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center space-x-1 underline"
+                  onClick={() => handleProviderChange('intervals_icu')}
+                  className={`p-2.5 rounded-xl border text-left transition ${
+                    config.provider === 'intervals_icu'
+                      ? 'bg-cyan-950/60 border-cyan-500 text-white'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
                 >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  <span>
-                    {showHelpGuide ? 'Masquer le guide' : 'Comment relier Garmin ou COROS en 60s ?'}
-                  </span>
+                  <div className="text-xs font-extrabold text-cyan-300">⚡ Intervals.icu</div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Garmin + COROS + Cloud Sync
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleProviderChange('strava')}
+                  className={`p-2.5 rounded-xl border text-left transition ${
+                    config.provider === 'strava'
+                      ? 'bg-amber-950/50 border-amber-500 text-white'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <div className="text-xs font-extrabold text-amber-400">🟠 Strava API</div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Import de sorties</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleProviderChange('demo')}
+                  className={`p-2.5 rounded-xl border text-left transition ${
+                    config.provider === 'demo'
+                      ? 'bg-emerald-950/50 border-emerald-500 text-white'
+                      : 'bg-slate-900 border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <div className="text-xs font-extrabold text-emerald-400">⌚ Simulation</div>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Test sans clé API</p>
                 </button>
               </div>
 
-              {showHelpGuide && (
-                <div className="p-3 bg-slate-900 rounded-lg border border-cyan-500/30 text-xs text-slate-300 space-y-1.5">
-                  <p className="font-semibold text-white">
-                    Guide de connexion bidirectionnelle (Garmin & COROS) :
-                  </p>
-                  <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-300">
-                    <li>
-                      Sur{' '}
-                      <a
-                        href="https://intervals.icu"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-cyan-400 underline inline-flex items-center space-x-0.5"
-                      >
-                        <span>intervals.icu</span>
-                        <ExternalLink className="w-3 h-3 ml-0.5" />
-                      </a>{' '}
-                      (gratuit), ouvrez <strong>Settings</strong> et connectez{' '}
-                      <strong>Garmin Connect</strong> ou <strong>COROS</strong> en cochant{' '}
-                      <em>"Upload planned workouts"</em>.
-                    </li>
-                    <li>
-                      Tout en bas de la page <strong>Settings → Developer Settings</strong>, cliquez sur{' '}
-                      <strong>API Key (View)</strong>.
-                    </li>
-                    <li>
-                      Collez votre clé API ci-dessous (laissez ID Athlète à <code>0</code>). Vos séances TriaTrain apparaîtront automatiquement dans votre montre !
-                    </li>
-                  </ol>
+              {config.provider === 'intervals_icu' && (
+                <div className="space-y-2.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-1.5 text-xs font-bold text-cyan-400">
+                      <Key className="w-3.5 h-3.5" />
+                      <span>Identifiants Intervals.icu</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowHelpGuide(!showHelpGuide)}
+                      className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center space-x-1 underline"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>{showHelpGuide ? 'Masquer guide' : 'Où trouver ma clé ?'}</span>
+                    </button>
+                  </div>
+
+                  {showHelpGuide && (
+                    <div className="p-3 bg-slate-900 rounded-lg border border-cyan-500/30 text-xs text-slate-300 space-y-1">
+                      <ol className="list-decimal list-inside space-y-1 text-[11px]">
+                        <li>
+                          Sur{' '}
+                          <a
+                            href="https://intervals.icu"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-cyan-400 underline inline-flex items-center"
+                          >
+                            intervals.icu <ExternalLink className="w-3 h-3 ml-0.5" />
+                          </a>
+                          , activez <strong>Garmin Connect</strong> dans <em>Settings</em>.
+                        </li>
+                        <li>
+                          En bas de <em>Settings → Developer Settings</em>, copiez votre{' '}
+                          <strong>API Key</strong>.
+                        </li>
+                      </ol>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">
+                        ID Athlète (<code>0</code> = auto)
+                      </label>
+                      <input
+                        type="text"
+                        value={config.intervalsAthleteId}
+                        onChange={(e) => handleConfigChange('intervalsAthleteId', e.target.value)}
+                        placeholder="0 ou i123456"
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] text-slate-400 mb-1">
+                        Clé API (API Key)
+                      </label>
+                      <input
+                        type="password"
+                        value={config.intervalsApiKey}
+                        onChange={(e) => handleConfigChange('intervalsApiKey', e.target.value)}
+                        placeholder="Collez votre API Key Intervals.icu..."
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">
-                    ID Athlète (<code>0</code> = automatique)
-                  </label>
-                  <input
-                    type="text"
-                    value={config.intervalsAthleteId}
-                    onChange={(e) => handleConfigChange('intervalsAthleteId', e.target.value)}
-                    placeholder="0 ou i123456"
-                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] text-slate-400 mb-1">
-                    Clé API Personnelle (API Key)
+              {config.provider === 'strava' && (
+                <div className="space-y-2 pt-1">
+                  <label className="block text-[10px] text-slate-400">
+                    Access Token Strava (scope activity:read_all)
                   </label>
                   <input
                     type="password"
-                    value={config.intervalsApiKey}
-                    onChange={(e) => handleConfigChange('intervalsApiKey', e.target.value)}
-                    placeholder="Collez votre API Key Intervals.icu..."
-                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                    value={config.stravaAccessToken}
+                    onChange={(e) => handleConfigChange('stravaAccessToken', e.target.value)}
+                    placeholder="Votre Access Token Strava..."
+                    className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono"
                   />
                 </div>
-              </div>
-            </div>
-          )}
-
-          {config.provider === 'strava' && syncDirection === 'pull_results' && (
-            <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2 text-xs font-bold text-amber-400">
-                  <Key className="w-4 h-4" />
-                  <span>Identifiants API Strava (scope activity:read_all)</span>
-                </div>
-                <a
-                  href="https://www.strava.com/settings/api"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center space-x-1 underline"
-                >
-                  <span>Ouvrir strava.com/settings/api</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">
-                  Access Token Strava (ou laissez vide si vous remplissez le Refresh Token ci-dessous)
-                </label>
-                <input
-                  type="password"
-                  value={config.stravaAccessToken}
-                  onChange={(e) => handleConfigChange('stravaAccessToken', e.target.value)}
-                  placeholder="Votre Access Token Strava..."
-                  className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                <div>
-                  <label className="block text-[10px] text-slate-500 mb-1">Client ID (optionnel)</label>
-                  <input
-                    type="text"
-                    value={config.stravaClientId || ''}
-                    onChange={(e) => handleConfigChange('stravaClientId', e.target.value)}
-                    placeholder="Ex: 104521"
-                    className="w-full px-2.5 py-1 bg-slate-900 border border-slate-800 rounded text-xs text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-500 mb-1">Client Secret (optionnel)</label>
-                  <input
-                    type="password"
-                    value={config.stravaClientSecret || ''}
-                    onChange={(e) => handleConfigChange('stravaClientSecret', e.target.value)}
-                    placeholder="Client Secret..."
-                    className="w-full px-2.5 py-1 bg-slate-900 border border-slate-800 rounded text-xs text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-500 mb-1">
-                    Refresh Token (auto-renouvelé)
-                  </label>
-                  <input
-                    type="password"
-                    value={config.stravaRefreshToken || ''}
-                    onChange={(e) => handleConfigChange('stravaRefreshToken', e.target.value)}
-                    placeholder="Refresh Token..."
-                    className="w-full px-2.5 py-1 bg-slate-900 border border-slate-800 rounded text-xs text-white font-mono"
-                  />
-                </div>
-              </div>
+              )}
             </div>
           )}
 
@@ -556,10 +632,10 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
               <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-cyan-950/50 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1">
                   <h3 className="text-xs sm:text-sm font-extrabold text-white">
-                    2. Envoyer la Semaine {currentWeek.weekNumber} ({availableWorkouts.length} séances) vers la montre
+                    Envoyer la Semaine {currentWeek.weekNumber} ({availableWorkouts.length} séances) vers la montre
                   </h3>
                   <p className="text-[11px] text-slate-300">
-                    Chaque séance inclut ses blocs d'échauffement, éducatifs (drills), intervalles et zones cibles adaptés à votre profil.
+                    Chaque séance inclut ses blocs d'échauffement, éducatifs (drills), intervalles et allures cibles adaptés à votre profil.
                   </p>
                 </div>
 
@@ -619,7 +695,7 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
                             }
                             className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[11px] font-semibold flex items-center space-x-1 transition"
                           >
-                            <span>Voir les {watchSteps.length} drills</span>
+                            <span>{watchSteps.length} drills</span>
                             {isExpanded ? (
                               <ChevronUp className="w-3.5 h-3.5" />
                             ) : (
@@ -734,7 +810,7 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
                     <div>
                       <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                        2. Sorties Garmin détectées ({activities.length})
+                        Sorties Garmin détectées ({activities.length})
                       </h3>
                       <p className="text-[11px] text-slate-400">
                         Vérifiez l'association automatique avec vos séances prévues de la Semaine {currentWeek.weekNumber}
@@ -870,8 +946,10 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
         {/* Footer */}
         <div className="p-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-1.5 text-[11px] text-slate-400">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Compatible montres Garmin (Forerunner, Fenix, Epix) & COROS (Pace, Apex, Vertix).</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="truncate">
+              Compatible Garmin (Forerunner, Fenix, Epix) & COROS.
+            </span>
           </div>
 
           <button

@@ -13,6 +13,11 @@ import {
   shiftTrainingPlanStartDate,
   getMondayOfWeek,
 } from './utils/planGenerator';
+import { loadGarminConfig } from './utils/garminBridge';
+import {
+  pushStateToIntervalsCloud,
+  TriaTrainCloudSnapshot,
+} from './utils/cloudSync';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { PlanOverview } from './components/PlanOverview';
@@ -20,11 +25,11 @@ import { ZonesCenter } from './components/ZonesCenter';
 import { BeginnerToolkit } from './components/BeginnerToolkit';
 import { WorkoutModal } from './components/WorkoutModal';
 import { OnboardingModal } from './components/OnboardingModal';
-import { ProfileSettings } from './components/ProfileSettings';
+import { ProfileSettings, ProfileTabSection } from './components/ProfileSettings';
 import { WeeklyScheduleModal } from './components/WeeklyScheduleModal';
 import { GarminSyncModal } from './components/GarminSyncModal';
 import { WhatsNewModal } from './components/WhatsNewModal';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Cloud } from 'lucide-react';
 
 export const App: React.FC = () => {
   // 1. Profile State
@@ -56,6 +61,8 @@ export const App: React.FC = () => {
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
+  const [profileInitialSection, setProfileInitialSection] =
+    useState<ProfileTabSection>('objective');
   const [isWeeklyScheduleOpen, setIsWeeklyScheduleOpen] = useState<boolean>(false);
   const [isGarminSyncOpen, setIsGarminSyncOpen] = useState<boolean>(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState<boolean>(false);
@@ -68,6 +75,44 @@ export const App: React.FC = () => {
       localStorage.setItem('triatrain_visited', 'true');
     }
   }, []);
+
+  // Silent background Cloud Push helper when Intervals.icu API Key is configured
+  const triggerBackgroundCloudPush = (
+    nextProfile: AthleteProfile,
+    nextPlan: TrainingPlan,
+    nextWeekIdx: number
+  ) => {
+    try {
+      const cfg = loadGarminConfig();
+      if (cfg.provider === 'intervals_icu' && cfg.intervalsApiKey.trim().length > 0) {
+        pushStateToIntervalsCloud(cfg, nextProfile, nextPlan, nextWeekIdx).catch(() => {
+          // non-blocking background sync
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // Restore full snapshot (Profile + Plan + Results + WeekIndex) from Cloud or JSON backup
+  const handleRestoreCloudSnapshot = (snapshot: TriaTrainCloudSnapshot) => {
+    if (!snapshot || !snapshot.profile || !snapshot.plan) return;
+    setProfile(snapshot.profile);
+    setPlan(snapshot.plan);
+    const safeWeekIdx = Math.min(
+      Math.max(0, snapshot.currentWeekIndex || 0),
+      Math.max(0, (snapshot.plan.weeks?.length || 1) - 1)
+    );
+    setCurrentWeekIndex(safeWeekIdx);
+
+    try {
+      localStorage.setItem('triatrain_athlete_profile', JSON.stringify(snapshot.profile));
+      localStorage.setItem('triatrain_training_plan', JSON.stringify(snapshot.plan));
+      localStorage.setItem('triatrain_visited', 'true');
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Save to localStorage when profile changes
   const handleSaveProfile = (newProfile: AthleteProfile) => {
@@ -86,6 +131,7 @@ export const App: React.FC = () => {
       console.error(e);
     }
     setCurrentWeekIndex(0);
+    triggerBackgroundCloudPush(newProfile, newPlan, 0);
   };
 
   // Update a single workout (completion, RPE, notes)
@@ -115,6 +161,7 @@ export const App: React.FC = () => {
     if (selectedWorkout && selectedWorkout.id === updatedWorkout.id) {
       setSelectedWorkout(updatedWorkout);
     }
+    triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
   // Quick toggle completion status directly from card
@@ -149,6 +196,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
+    triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
   // 4. Swap or Move Workouts between days in the current week
@@ -246,6 +294,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
+    triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
   // 5. Add a workout to a day in the current week
@@ -326,6 +375,7 @@ export const App: React.FC = () => {
     }
 
     setSelectedWorkout(newWorkout);
+    triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
   // 6. Delete a workout from the current week
@@ -382,6 +432,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
+    triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
   // 7. Save custom weekly schedule preference
@@ -453,6 +504,7 @@ export const App: React.FC = () => {
         garminActivity: act,
       });
     }
+    triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
   // 9. Mark workouts as pushed to watch (Garmin / COROS)
@@ -481,6 +533,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
+    triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
   // 10. Shift existing training plan start date (Week 1) without losing completed workouts or Garmin syncs
@@ -503,10 +556,11 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
+    triggerBackgroundCloudPush(updatedProfile, shiftedPlan, currentWeekIndex);
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white pb-16 md:pb-0">
       {/* Top Navigation */}
       <Navbar
         activeTab={activeTab}
@@ -514,13 +568,16 @@ export const App: React.FC = () => {
         profile={profile}
         plan={plan}
         onOpenOnboarding={() => setIsOnboardingOpen(true)}
-        onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenProfile={() => {
+          setProfileInitialSection('objective');
+          setIsProfileOpen(true);
+        }}
         onOpenGarminSync={() => setIsGarminSyncOpen(true)}
         onOpenWhatsNew={() => setIsWhatsNewOpen(true)}
       />
 
       {/* Main View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
         {activeTab === 'dashboard' && (
           <Dashboard
             plan={plan}
@@ -530,7 +587,10 @@ export const App: React.FC = () => {
             onSelectWorkout={(wo) => setSelectedWorkout(wo)}
             onToggleWorkoutStatus={handleToggleWorkoutStatus}
             onOpenOnboarding={() => setIsOnboardingOpen(true)}
-            onOpenWeeklySchedule={() => setIsWeeklyScheduleOpen(true)}
+            onOpenWeeklySchedule={() => {
+              setProfileInitialSection('schedule');
+              setIsProfileOpen(true);
+            }}
             onOpenGarminSync={() => setIsGarminSyncOpen(true)}
             onSwapWorkouts={handleSwapWorkouts}
             onAddWorkoutToDay={handleAddWorkoutToDay}
@@ -556,7 +616,7 @@ export const App: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 py-6 mt-12">
+      <footer className="border-t border-slate-900 bg-slate-950/80 py-6 mt-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center space-x-2">
             <span className="font-bold text-slate-300">TriaTrain</span>
@@ -564,13 +624,24 @@ export const App: React.FC = () => {
             <span>Programme d'entraînement Triathlon Personnalisé</span>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => {
+                setProfileInitialSection('connections');
+                setIsProfileOpen(true);
+              }}
+              className="text-cyan-400 hover:text-cyan-300 transition flex items-center space-x-1.5 font-medium"
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Sync Cloud (iPhone ↔ PC)</span>
+            </button>
+
             <button
               onClick={() => setIsWhatsNewOpen(true)}
               className="text-amber-400 hover:text-amber-300 transition flex items-center space-x-1.5 font-medium"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Nouveautés & Versions (v1.1)</span>
+              <span>Nouveautés & Versions (v1.2)</span>
             </button>
           </div>
         </div>
@@ -591,8 +662,15 @@ export const App: React.FC = () => {
         onClose={() => setIsGarminSyncOpen(false)}
         currentWeek={plan.weeks[currentWeekIndex] || plan.weeks[0]}
         profile={profile}
+        plan={plan}
+        currentWeekIndex={currentWeekIndex}
         onApplySyncedActivities={handleApplySyncedActivities}
         onMarkWorkoutsPushedToWatch={handleMarkWorkoutsPushedToWatch}
+        onOpenProfileConnections={() => {
+          setProfileInitialSection('connections');
+          setIsProfileOpen(true);
+        }}
+        onRestoreCloudSnapshot={handleRestoreCloudSnapshot}
       />
 
       <OnboardingModal
@@ -606,7 +684,11 @@ export const App: React.FC = () => {
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
         profile={profile}
+        plan={plan}
+        currentWeekIndex={currentWeekIndex}
+        initialSection={profileInitialSection}
         onSaveProfile={handleSaveProfile}
+        onRestoreCloudSnapshot={handleRestoreCloudSnapshot}
       />
 
       <WeeklyScheduleModal
