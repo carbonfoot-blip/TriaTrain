@@ -12,6 +12,7 @@ import {
   generateTrainingPlan,
   shiftTrainingPlanStartDate,
   getMondayOfWeek,
+  findActiveWeekIndexForToday,
 } from './utils/planGenerator';
 import { loadGarminConfig } from './utils/garminBridge';
 import {
@@ -30,6 +31,37 @@ import { WeeklyScheduleModal } from './components/WeeklyScheduleModal';
 import { GarminSyncModal } from './components/GarminSyncModal';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { Sparkles, Cloud } from 'lucide-react';
+
+/**
+ * Détermine automatiquement l'index de la semaine correspondant à la date d'aujourd'hui
+ * (ex: si Semaine 1 a commencé la semaine passée, retourne l'index 1 = Semaine 2).
+ */
+function resolveCurrentWeekIndex(targetPlan: TrainingPlan): number {
+  if (!targetPlan || !Array.isArray(targetPlan.weeks) || targetPlan.weeks.length === 0) {
+    return 0;
+  }
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+  const todayMonday = getMondayOfWeek(todayIso);
+
+  const exactIdx = targetPlan.weeks.findIndex(
+    (w) =>
+      w.startDate === todayMonday ||
+      (todayIso >= w.startDate && todayIso <= w.endDate)
+  );
+  if (exactIdx >= 0) {
+    return exactIdx;
+  }
+
+  const lastWeek = targetPlan.weeks[targetPlan.weeks.length - 1];
+  if (lastWeek && todayIso > lastWeek.endDate) {
+    return targetPlan.weeks.length - 1;
+  }
+
+  return findActiveWeekIndexForToday(targetPlan);
+}
 
 export const App: React.FC = () => {
   // 1. Profile State
@@ -53,11 +85,13 @@ export const App: React.FC = () => {
     return generateTrainingPlan(DEFAULT_ATHLETE_PROFILE);
   });
 
-  // 3. UI Navigation State
+  // 3. UI Navigation State (ouvre automatiquement sur la semaine en cours !)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'plan' | 'zones' | 'toolkit'>(
     'dashboard'
   );
-  const [currentWeekIndex, setCurrentWeekIndex] = useState<number>(0);
+  const [currentWeekIndex, setCurrentWeekIndex] = useState<number>(() =>
+    resolveCurrentWeekIndex(plan)
+  );
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
@@ -99,11 +133,8 @@ export const App: React.FC = () => {
     if (!snapshot || !snapshot.profile || !snapshot.plan) return;
     setProfile(snapshot.profile);
     setPlan(snapshot.plan);
-    const safeWeekIdx = Math.min(
-      Math.max(0, snapshot.currentWeekIndex || 0),
-      Math.max(0, (snapshot.plan.weeks?.length || 1) - 1)
-    );
-    setCurrentWeekIndex(safeWeekIdx);
+    const activeWeekIdx = resolveCurrentWeekIndex(snapshot.plan);
+    setCurrentWeekIndex(activeWeekIdx);
 
     try {
       localStorage.setItem('triatrain_athlete_profile', JSON.stringify(snapshot.profile));
@@ -130,8 +161,9 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-    setCurrentWeekIndex(0);
-    triggerBackgroundCloudPush(newProfile, newPlan, 0);
+    const activeWeekIdx = resolveCurrentWeekIndex(newPlan);
+    setCurrentWeekIndex(activeWeekIdx);
+    triggerBackgroundCloudPush(newProfile, newPlan, activeWeekIdx);
   };
 
   // Update a single workout (completion, RPE, notes)
@@ -550,13 +582,15 @@ export const App: React.FC = () => {
 
     setProfile(updatedProfile);
     setPlan(shiftedPlan);
+    const activeWeekIdx = resolveCurrentWeekIndex(shiftedPlan);
+    setCurrentWeekIndex(activeWeekIdx);
     try {
       localStorage.setItem('triatrain_athlete_profile', JSON.stringify(updatedProfile));
       localStorage.setItem('triatrain_training_plan', JSON.stringify(shiftedPlan));
     } catch (e) {
       console.error(e);
     }
-    triggerBackgroundCloudPush(updatedProfile, shiftedPlan, currentWeekIndex);
+    triggerBackgroundCloudPush(updatedProfile, shiftedPlan, activeWeekIdx);
   };
 
   return (
