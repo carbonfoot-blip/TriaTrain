@@ -99,14 +99,46 @@ export const App: React.FC = () => {
     useState<ProfileTabSection>('objective');
   const [isWeeklyScheduleOpen, setIsWeeklyScheduleOpen] = useState<boolean>(false);
   const [isGarminSyncOpen, setIsGarminSyncOpen] = useState<boolean>(false);
+  const [isStartupImportPrompt, setIsStartupImportPrompt] = useState<boolean>(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState<boolean>(false);
 
-  // Check if first visit to prompt onboarding
+  // Check if first visit to prompt onboarding, OR if user has a plan + Intervals.icu configured
+  // AND does not already have an imported/completed workout today, prompt to import recent workouts
   useEffect(() => {
     const hasVisited = localStorage.getItem('triatrain_visited');
-    if (!hasVisited) {
+    const savedPlanStr = localStorage.getItem('triatrain_training_plan');
+
+    if (!hasVisited && !savedPlanStr) {
       setIsOnboardingOpen(true);
       localStorage.setItem('triatrain_visited', 'true');
+      return;
+    }
+
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate()
+    ).padStart(2, '0')}`;
+
+    const hasActivePlan = Boolean(plan && Array.isArray(plan.weeks) && plan.weeks.length > 0);
+    const garminCfg = loadGarminConfig();
+    const hasIntervalsConfigured =
+      garminCfg.provider === 'intervals_icu' && garminCfg.intervalsApiKey.trim().length > 0;
+
+    // Vérifie s'il y a déjà une entrée (import Garmin/Intervals.icu ou séance complétée) aujourd'hui
+    const alreadyHasEntryToday =
+      hasActivePlan &&
+      plan.weeks.some((w) =>
+        w.workouts.some(
+          (wo) =>
+            wo.sport !== 'rest' &&
+            ((wo.date === todayIso && (Boolean(wo.garminActivity) || wo.status === 'completed')) ||
+              wo.garminActivity?.startDateLocal === todayIso)
+        )
+      );
+
+    if (hasActivePlan && hasIntervalsConfigured && !alreadyHasEntryToday) {
+      setIsStartupImportPrompt(true);
+      setIsGarminSyncOpen(true);
     }
   }, []);
 
@@ -606,7 +638,10 @@ export const App: React.FC = () => {
           setProfileInitialSection('objective');
           setIsProfileOpen(true);
         }}
-        onOpenGarminSync={() => setIsGarminSyncOpen(true)}
+        onOpenGarminSync={() => {
+          setIsStartupImportPrompt(false);
+          setIsGarminSyncOpen(true);
+        }}
         onOpenWhatsNew={() => setIsWhatsNewOpen(true)}
       />
 
@@ -625,7 +660,10 @@ export const App: React.FC = () => {
               setProfileInitialSection('schedule');
               setIsProfileOpen(true);
             }}
-            onOpenGarminSync={() => setIsGarminSyncOpen(true)}
+            onOpenGarminSync={() => {
+              setIsStartupImportPrompt(false);
+              setIsGarminSyncOpen(true);
+            }}
             onSwapWorkouts={handleSwapWorkouts}
             onAddWorkoutToDay={handleAddWorkoutToDay}
             onDeleteWorkout={handleDeleteWorkout}
@@ -688,16 +726,23 @@ export const App: React.FC = () => {
         onClose={() => setSelectedWorkout(null)}
         onUpdateWorkout={handleUpdateWorkout}
         profile={profile}
-        onOpenGarminSync={() => setIsGarminSyncOpen(true)}
+        onOpenGarminSync={() => {
+          setIsStartupImportPrompt(false);
+          setIsGarminSyncOpen(true);
+        }}
       />
 
       <GarminSyncModal
         isOpen={isGarminSyncOpen}
-        onClose={() => setIsGarminSyncOpen(false)}
+        onClose={() => {
+          setIsGarminSyncOpen(false);
+          setIsStartupImportPrompt(false);
+        }}
         currentWeek={plan.weeks[currentWeekIndex] || plan.weeks[0]}
         profile={profile}
         plan={plan}
         currentWeekIndex={currentWeekIndex}
+        isStartupPrompt={isStartupImportPrompt}
         onApplySyncedActivities={handleApplySyncedActivities}
         onMarkWorkoutsPushedToWatch={handleMarkWorkoutsPushedToWatch}
         onOpenProfileConnections={() => {
