@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   Watch,
@@ -23,6 +23,8 @@ import {
   Settings,
   CloudUpload,
   CloudDownload,
+  Calendar,
+  Sparkles,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -61,6 +63,7 @@ interface GarminSyncModalProps {
   profile: AthleteProfile;
   plan?: TrainingPlan;
   currentWeekIndex?: number;
+  isStartupPrompt?: boolean;
   onApplySyncedActivities: (updates: { workoutId: string; activity: GarminActivityMetrics }[]) => void;
   onMarkWorkoutsPushedToWatch?: (workoutIds: string[], timestamp: string) => void;
   onOpenProfileConnections?: () => void;
@@ -69,6 +72,21 @@ interface GarminSyncModalProps {
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
+function getLocalTodayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+}
+
+function shiftLocalIsoDate(baseIso: string, deltaDays: number): string {
+  const d = new Date(`${baseIso}T12:00:00`);
+  d.setDate(d.getDate() + deltaDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+}
+
 export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
   isOpen,
   onClose,
@@ -76,14 +94,17 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
   profile,
   plan,
   currentWeekIndex = 0,
+  isStartupPrompt = false,
   onApplySyncedActivities,
   onMarkWorkoutsPushedToWatch,
   onOpenProfileConnections,
   onRestoreCloudSnapshot,
 }) => {
+  const todayIso = getLocalTodayIso();
+
   // Direction Mode: 'push_to_watch' | 'pull_results'
   const [syncDirection, setSyncDirection] = useState<'push_to_watch' | 'pull_results'>(
-    'push_to_watch'
+    isStartupPrompt ? 'pull_results' : 'push_to_watch'
   );
 
   const [config, setConfig] = useState<GarminBridgeConfig>(() => loadGarminConfig());
@@ -97,9 +118,9 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
   const [showHelpGuide, setShowHelpGuide] = useState<boolean>(false);
   const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null);
 
-  // Date range for fetching
-  const [oldestDate, setOldestDate] = useState<string>(currentWeek.startDate);
-  const [newestDate, setNewestDate] = useState<string>(currentWeek.endDate);
+  // Date range for fetching (Default: Today -> Today as requested)
+  const [oldestDate, setOldestDate] = useState<string>(todayIso);
+  const [newestDate, setNewestDate] = useState<string>(todayIso);
 
   useEffect(() => {
     if (isOpen) {
@@ -109,12 +130,40 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
         (freshCfg.provider === 'intervals_icu' && freshCfg.intervalsApiKey.trim().length > 0) ||
         (freshCfg.provider === 'strava' && freshCfg.stravaAccessToken.trim().length > 0);
       setShowInlineConfig(!isAlreadyConfigured);
-      setOldestDate(currentWeek.startDate);
-      setNewestDate(currentWeek.endDate);
+
+      const currentToday = getLocalTodayIso();
+      setOldestDate(currentToday);
+      setNewestDate(currentToday);
+
+      if (isStartupPrompt) {
+        setSyncDirection('pull_results');
+      }
+      setActivities([]);
+      setSelectedMatches({});
       setErrorMsg(null);
       setSyncSuccessMsg(null);
     }
-  }, [isOpen, currentWeek]);
+  }, [isOpen, isStartupPrompt]);
+
+  // Candidate workouts across the plan matching the selected date range + currentWeek
+  const candidateWorkoutsForPull = useMemo(() => {
+    const map = new Map<string, Workout>();
+    if (plan && Array.isArray(plan.weeks)) {
+      plan.weeks.forEach((w) => {
+        w.workouts.forEach((wo) => {
+          if (wo.sport !== 'rest' && wo.date >= oldestDate && wo.date <= newestDate) {
+            map.set(wo.id, wo);
+          }
+        });
+      });
+    }
+    currentWeek.workouts.forEach((wo) => {
+      if (wo.sport !== 'rest' && !map.has(wo.id)) {
+        map.set(wo.id, wo);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }, [plan, currentWeek, oldestDate, newestDate]);
 
   if (!isOpen) return null;
 
@@ -136,8 +185,8 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
     saveGarminConfig(nextConfig);
   };
 
-  const applyAutoMatching = (fetched: GarminActivityMetrics[]) => {
-    const suggestions = matchActivitiesToWeekWorkouts(fetched, currentWeek.workouts);
+  const applyAutoMatching = (fetched: GarminActivityMetrics[], pool: Workout[]) => {
+    const suggestions = matchActivitiesToWeekWorkouts(fetched, pool);
     const map: Record<string, string> = {};
     suggestions.forEach((s) => {
       if (s.matchedWorkoutId) {
@@ -172,11 +221,13 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
       saveGarminConfig(updatedCfg);
 
       setActivities(fetched);
-      applyAutoMatching(fetched);
+      applyAutoMatching(fetched, candidateWorkoutsForPull);
 
       if (fetched.length === 0) {
         setErrorMsg(
-          `Aucune sortie Garmin trouvée entre le ${oldestDate} et le ${newestDate}. Vérifiez vos dates ou essayez le mode Simulation Garmin.`
+          oldestDate === newestDate
+            ? `Aucune sortie trouvée sur Intervals.icu pour la date du ${oldestDate}. Vous pouvez choisir d'autres dates ci-dessus (ex: Hier ou Cette semaine).`
+            : `Aucune sortie trouvée entre le ${oldestDate} et le ${newestDate}. Vérifiez vos dates ci-dessus.`
         );
       }
     } catch (err) {
@@ -256,7 +307,7 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
     if (!targetWorkoutId) return;
 
     onApplySyncedActivities([{ workoutId: targetWorkoutId, activity }]);
-    setSyncSuccessMsg(`Sortie "${activity.activityName}" associée avec succès !`);
+    setSyncSuccessMsg(`Sortie "${activity.activityName}" importée et validée avec succès !`);
     try {
       confetti({ particleCount: 45, spread: 60, origin: { y: 0.7 } });
     } catch {
@@ -274,7 +325,7 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
     });
 
     if (updates.length === 0) {
-      setErrorMsg('Aucune activité n’est associée à une séance de la semaine.');
+      setErrorMsg('Aucune activité n’est associée à une séance du plan.');
       return;
     }
 
@@ -319,14 +370,18 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-sm sm:text-lg font-extrabold text-white">
-                  Montre Garmin / COROS & Cloud
+                  {isStartupPrompt
+                    ? 'Importer vos entraînements récents ?'
+                    : 'Montre Garmin / COROS & Cloud'}
                 </h2>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 hidden sm:inline">
-                  Bidirectionnel
+                  Intervals.icu Connecté
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-slate-400">
-                Poussez vos séances vers la montre, importez vos sorties ou synchronisez iPhone ↔ PC
+                {isStartupPrompt
+                  ? "Récupérez vos résultats du jour (ou d'une autre date) dès l'ouverture"
+                  : 'Poussez vos séances vers la montre, importez vos sorties ou synchronisez iPhone ↔ PC'}
               </p>
             </div>
           </div>
@@ -334,10 +389,34 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition"
+            title="Fermer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Startup Welcome Prompt Banner */}
+        {isStartupPrompt && (
+          <div className="mx-4 sm:mx-6 mt-3 p-3.5 rounded-xl bg-gradient-to-r from-cyan-950/80 via-slate-900 to-emerald-950/70 border border-cyan-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start space-x-2.5">
+              <Sparkles className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-200 leading-relaxed">
+                <span className="font-extrabold text-white">
+                  👋 Bon retour {profile.name.split(' ')[0]} !
+                </span>{' '}
+                Voulez-vous importer vos entraînements récents depuis Intervals.icu / Garmin ? Les dates sont réglées sur{' '}
+                <strong className="text-cyan-300">aujourd'hui ({todayIso})</strong> par défaut, mais vous pouvez les modifier ci-dessous.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold shrink-0 self-end sm:self-center border border-slate-700 transition"
+            >
+              Plus tard →
+            </button>
+          </div>
+        )}
 
         {/* Compact Connection Status Bar (Hides bulky API key config once configured!) */}
         <div className="px-4 sm:px-6 pt-3 bg-slate-900">
@@ -770,39 +849,117 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
           {/* ===================================================================== */}
           {syncDirection === 'pull_results' && (
             <>
-              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 p-4 bg-slate-950/50 rounded-xl border border-slate-800">
-                <div className="grid grid-cols-2 gap-3 flex-1">
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Du (Date début)</label>
-                    <input
-                      type="date"
-                      value={oldestDate}
-                      onChange={(e) => setOldestDate(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Au (Date fin)</label>
-                    <input
-                      type="date"
-                      value={newestDate}
-                      onChange={(e) => setNewestDate(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono"
-                    />
+              <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 space-y-3">
+                {/* Quick Date Range Presets */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-300 flex items-center space-x-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Période des entraînements à importer :</span>
+                  </span>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOldestDate(todayIso);
+                        setNewestDate(todayIso);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition border ${
+                        oldestDate === todayIso && newestDate === todayIso
+                          ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-sm'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      📍 Aujourd'hui
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const yest = shiftLocalIsoDate(todayIso, -1);
+                        setOldestDate(yest);
+                        setNewestDate(todayIso);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition border ${
+                        oldestDate === shiftLocalIsoDate(todayIso, -1) && newestDate === todayIso
+                          ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-sm'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      ⏪ Hier & Aujourd'hui
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOldestDate(currentWeek.startDate);
+                        setNewestDate(currentWeek.endDate);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition border ${
+                        oldestDate === currentWeek.startDate && newestDate === currentWeek.endDate
+                          ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-sm'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      📅 Semaine {currentWeek.weekNumber}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOldestDate(shiftLocalIsoDate(todayIso, -6));
+                        setNewestDate(todayIso);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition border ${
+                        oldestDate === shiftLocalIsoDate(todayIso, -6) && newestDate === todayIso
+                          ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-sm'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      🗓️ 7 derniers jours
+                    </button>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleFetchActivities}
-                  disabled={isLoading}
-                  className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:opacity-95 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2 shrink-0 disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                  <span>
-                    {isLoading ? 'Connexion à la montre...' : 'Récupérer mes sorties Garmin'}
-                  </span>
-                </button>
+                {/* Date Inputs + Fetch Button */}
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pt-1">
+                  <div className="grid grid-cols-2 gap-3 flex-1">
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">
+                        Début (Du)
+                      </label>
+                      <input
+                        type="date"
+                        value={oldestDate}
+                        onChange={(e) => setOldestDate(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono focus:border-cyan-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-slate-400 mb-1">
+                        Fin (Au)
+                      </label>
+                      <input
+                        type="date"
+                        value={newestDate}
+                        onChange={(e) => setNewestDate(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white font-mono focus:border-cyan-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleFetchActivities}
+                    disabled={isLoading}
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 hover:opacity-95 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2 shrink-0 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isLoading ? 'Recherche en cours...' : 'Récupérer mes sorties'}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {activities.length > 0 && (
@@ -810,10 +967,10 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
                     <div>
                       <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                        Sorties Garmin détectées ({activities.length})
+                        Sorties détectées ({activities.length})
                       </h3>
                       <p className="text-[11px] text-slate-400">
-                        Vérifiez l'association automatique avec vos séances prévues de la Semaine {currentWeek.weekNumber}
+                        Vérifiez l'association automatique avec les séances de votre plan
                       </p>
                     </div>
 
@@ -915,10 +1072,10 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
                                 className="flex-1 px-2.5 py-1 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-500"
                               >
                                 <option value="">— Ne pas associer —</option>
-                                {availableWorkouts.map((wo) => (
+                                {candidateWorkoutsForPull.map((wo) => (
                                   <option key={wo.id} value={wo.id}>
-                                    {DAY_LABELS[wo.dayOfWeek - 1]} ({wo.date}) • {wo.title} (
-                                    {wo.durationMinutes}m)
+                                    S{wo.weekNumber} • {DAY_LABELS[wo.dayOfWeek - 1]} ({wo.date}) •{' '}
+                                    {wo.title} ({wo.durationMinutes}m)
                                   </option>
                                 ))}
                               </select>
