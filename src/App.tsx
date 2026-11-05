@@ -102,8 +102,8 @@ export const App: React.FC = () => {
   const [isStartupImportPrompt, setIsStartupImportPrompt] = useState<boolean>(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState<boolean>(false);
 
-  // Check if first visit to prompt onboarding, OR if user has a plan + Intervals.icu configured,
-  // prompt to import recent workouts (defaulting start/end date to Today)
+  // Check if first visit to prompt onboarding, OR if user has a plan + Intervals.icu configured
+  // AND does not already have an imported/completed workout today, prompt to import recent workouts
   useEffect(() => {
     const hasVisited = localStorage.getItem('triatrain_visited');
     const savedPlanStr = localStorage.getItem('triatrain_training_plan');
@@ -114,12 +114,29 @@ export const App: React.FC = () => {
       return;
     }
 
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate()
+    ).padStart(2, '0')}`;
+
     const hasActivePlan = Boolean(plan && Array.isArray(plan.weeks) && plan.weeks.length > 0);
     const garminCfg = loadGarminConfig();
     const hasIntervalsConfigured =
       garminCfg.provider === 'intervals_icu' && garminCfg.intervalsApiKey.trim().length > 0;
 
-    if (hasActivePlan && hasIntervalsConfigured) {
+    // Vérifie s'il y a déjà une entrée (import Garmin/Intervals.icu ou séance complétée) aujourd'hui
+    const alreadyHasEntryToday =
+      hasActivePlan &&
+      plan.weeks.some((w) =>
+        w.workouts.some(
+          (wo) =>
+            wo.sport !== 'rest' &&
+            ((wo.date === todayIso && (Boolean(wo.garminActivity) || wo.status === 'completed')) ||
+              wo.garminActivity?.startDateLocal === todayIso)
+        )
+      );
+
+    if (hasActivePlan && hasIntervalsConfigured && !alreadyHasEntryToday) {
       setIsStartupImportPrompt(true);
       setIsGarminSyncOpen(true);
     }
