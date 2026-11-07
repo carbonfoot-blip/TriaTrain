@@ -350,7 +350,7 @@ export const WORKOUT_CATALOG: WorkoutTemplate[] = [
     }
   },
 
-  // ===================== PPG / RENFORCEMENT =====================
+  // ===================== PPG / RENFORCEMENT / POIDS =====================
   {
     id: 'strength-core-prevention',
     title: 'PPG : Renforcement Musculaire & Gainage (30 min)',
@@ -367,6 +367,50 @@ export const WORKOUT_CATALOG: WorkoutTemplate[] = [
       { type: 'warmup', name: 'Mobilisations articulaires chevilles/hanches', durationMinutes: 5, targetZone: 'Z1', targetDescription: 'Rotations douces' },
       { type: 'drill', name: 'Circuit Gainage (Planche ventrale, latérale, pont fessier)', durationMinutes: 15, targetZone: 'Z2', targetDescription: '4 x 45s effort / 15s récup' },
       { type: 'interval', name: 'Fentes marchées & Squats contrôlés', durationMinutes: 10, targetZone: 'Z2', targetDescription: '3 séries de 10 reps par jambe' }
+    ]
+  },
+  {
+    id: 'strength-weights-fullbody',
+    title: 'Poids & Haltères : Full Body Athlétique (45 min)',
+    sport: 'strength',
+    category: 'strength',
+    durationMinutes: 45,
+    distanceMeters: 0,
+    targetZone: 'Z2',
+    intensityRpe: 6,
+    shortSummary: 'Squats gobelet, tirage dos, développé haltères & core',
+    description: 'Séance de musculation fonctionnelle avec poids libres pour renforcer la chaîne postérieure, les épaules (natation) et le gainage.',
+    coachTips: [
+      'Contrôlez la phase excentrique (descente sur 2 secondes) sur chaque mouvement.',
+      'Gardez 1 min 15 de repos entre les séries.'
+    ],
+    stepsGenerator: () => [
+      { type: 'warmup', name: 'Activation articulaire & élastiques', durationMinutes: 8, targetZone: 'Z1', targetDescription: 'Épaules, hanches, chevilles' },
+      { type: 'interval', name: 'Bloc 1 : Goblet Squat & Soulevé de terre roumain (Haltères)', durationMinutes: 15, targetZone: 'Z2', targetDescription: '3 x 10 répétitions contrôlées' },
+      { type: 'interval', name: 'Bloc 2 : Tirage bûcheron & Développé épaules', durationMinutes: 14, targetZone: 'Z2', targetDescription: '3 x 12 répétitions' },
+      { type: 'cooldown', name: 'Gainage dynamique & étirements doux', durationMinutes: 8, targetZone: 'Z1', targetDescription: 'Planche + mobilité thoracique' }
+    ]
+  },
+  {
+    id: 'strength-weights-lower-power',
+    title: 'Poids & Force : Bas du Corps & Prévention Course/Vélo (40 min)',
+    sport: 'strength',
+    category: 'strength',
+    durationMinutes: 40,
+    distanceMeters: 0,
+    targetZone: 'Z3',
+    intensityRpe: 7,
+    shortSummary: 'Fentes bulgares, mollets excentriques, ischios & hanches',
+    description: 'Renforcement ciblé des jambes et des tendons (Achille, genou, psoas) pour améliorer l’économie de course et le coup de pédale.',
+    coachTips: [
+      'Évitez cette séance la veille d’une séance VMA ou d’une course.',
+      'Idéal en doublé après un footing souple ou une séance de natation.'
+    ],
+    stepsGenerator: () => [
+      { type: 'warmup', name: 'Échauffement hanches & squats poids du corps', durationMinutes: 7, targetZone: 'Z1', targetDescription: 'Mobilité active' },
+      { type: 'interval', name: 'Fentes Bulgares & Step-ups avec haltères', durationMinutes: 15, targetZone: 'Z3', targetDescription: '3 x 8 reps par jambe' },
+      { type: 'drill', name: 'Mollets excentriques sur marche & Pont fessier unilatéral', durationMinutes: 12, targetZone: 'Z2', targetDescription: '3 x 12 reps lentes' },
+      { type: 'cooldown', name: 'Relâchement & respiration', durationMinutes: 6, targetZone: 'Z1', targetDescription: 'Retour au calme' }
     ]
   },
 

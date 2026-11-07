@@ -421,6 +421,42 @@ export function generateTrainingPlan(profile: AthleteProfile): TrainingPlan {
       }
     }
 
+    // Ajout du 2e entraînement quotidien (Doublé : ex. Poids + Course, Vélo + Nage) si configuré dans la semaine type
+    const customScheduleForDoubles = profile.availability.weeklySchedule;
+    if (customScheduleForDoubles && customScheduleForDoubles.length > 0) {
+      for (let d = 1; d <= 7; d++) {
+        const pref = customScheduleForDoubles.find((s) => s.dayOfWeek === d);
+        if (
+          pref &&
+          pref.secondarySport &&
+          pref.secondarySport !== 'rest' &&
+          availableDays.includes(d) &&
+          !(w === totalWeeks && (d === 6 || d === 7))
+        ) {
+          const dayDate = addDays(weekStart, d - 1);
+          const restIdx = workouts.findIndex((wo) => wo.dayOfWeek === d && wo.sport === 'rest');
+          if (restIdx !== -1) {
+            workouts.splice(restIdx, 1);
+          }
+          let secWo: Workout | null = null;
+          if (pref.secondarySport === 'strength') {
+            secWo = createStrengthWorkout(w, d, dayDate, phase);
+            secWo.title = 'Poids & PPG : Renforcement Musculaire & Gainage';
+          } else if (pref.secondarySport === 'run') {
+            secWo = createRunEasyWorkout(w, d, dayDate, phase, efPace, progressMultiplier * 0.85, isRestWeek);
+          } else if (pref.secondarySport === 'bike') {
+            secWo = createBikeCadenceWorkout(w, d, dayDate, phase, ftp, avgBikeSpeed, isRestWeek);
+          } else if (pref.secondarySport === 'swim') {
+            secWo = createSwimAerobicWorkout(w, d, dayDate, phase, css, progressMultiplier * 0.85, isRestWeek);
+          }
+          if (secWo) {
+            secWo.id = `${secWo.id}-sec-${d}`;
+            workouts.push(secWo);
+          }
+        }
+      }
+    }
+
     // Weekly metrics computation
     let totalDur = 0;
     let totalDist = 0;

@@ -46,6 +46,8 @@ export interface WeeklyDayPreference {
   sport: SportType;
   category?: WorkoutCategory;
   customTitle?: string;
+  secondarySport?: SportType; // Optionnel : 2e entraînement le même jour (ex: Poids + Course, Vélo + Nage)
+  secondaryCategory?: WorkoutCategory;
 }
 
 export interface AthleteProfile {
