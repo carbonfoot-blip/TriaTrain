@@ -3,11 +3,16 @@ import {
   AthleteProfile,
   GarminActivityMetrics,
   TrainingPlan,
+  TrainingWeek,
   Workout,
   WorkoutStatus,
   WeeklyDayPreference,
 } from './types/triathlon';
 import { DEFAULT_ATHLETE_PROFILE } from './data/defaultProfile';
+import {
+  WorkoutTemplate,
+  instantiateWorkoutFromTemplate,
+} from './data/workoutCatalog';
 import {
   generateTrainingPlan,
   shiftTrainingPlanStartDate,
@@ -32,6 +37,51 @@ import { GarminSyncModal } from './components/GarminSyncModal';
 import { WhatsNewModal } from './components/WhatsNewModal';
 import { Sparkles, Cloud } from 'lucide-react';
 
+function getLocalTodayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+}
+
+/**
+ * Recalcule les totaux hebdomadaires (durée, distance, répartition par sport) d'une semaine
+ */
+function recomputeWeekTotals(week: TrainingWeek, workouts: Workout[]): TrainingWeek {
+  let totalDur = 0;
+  let totalDist = 0;
+  let swimMin = 0;
+  let bikeMin = 0;
+  let runMin = 0;
+  let strengthMin = 0;
+
+  workouts.forEach((wo) => {
+    if (wo.sport === 'rest') return;
+    totalDur += wo.durationMinutes;
+    totalDist += wo.distanceMeters / 1000;
+    if (wo.sport === 'swim') swimMin += wo.durationMinutes;
+    else if (wo.sport === 'bike') bikeMin += wo.durationMinutes;
+    else if (wo.sport === 'run') runMin += wo.durationMinutes;
+    else if (wo.sport === 'brick') {
+      bikeMin += Math.round(wo.durationMinutes * 0.75);
+      runMin += Math.round(wo.durationMinutes * 0.25);
+    } else if (wo.sport === 'strength') strengthMin += wo.durationMinutes;
+  });
+
+  return {
+    ...week,
+    workouts,
+    totalDurationMinutes: totalDur,
+    totalDistanceKm: Math.round(totalDist * 10) / 10,
+    sportBreakdown: {
+      swimMinutes: swimMin,
+      bikeMinutes: bikeMin,
+      runMinutes: runMin,
+      strengthMinutes: strengthMin,
+    },
+  };
+}
+
 /**
  * Détermine automatiquement l'index de la semaine correspondant à la date d'aujourd'hui
  * (ex: si Semaine 1 a commencé la semaine passée, retourne l'index 1 = Semaine 2).
@@ -40,10 +90,7 @@ function resolveCurrentWeekIndex(targetPlan: TrainingPlan): number {
   if (!targetPlan || !Array.isArray(targetPlan.weeks) || targetPlan.weeks.length === 0) {
     return 0;
   }
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate()
-  ).padStart(2, '0')}`;
+  const todayIso = getLocalTodayIso();
   const todayMonday = getMondayOfWeek(todayIso);
 
   const exactIdx = targetPlan.weeks.findIndex(
@@ -102,8 +149,9 @@ export const App: React.FC = () => {
   const [isStartupImportPrompt, setIsStartupImportPrompt] = useState<boolean>(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState<boolean>(false);
 
-  // Check if first visit to prompt onboarding, OR if user has a plan + Intervals.icu configured
-  // AND does not already have an imported/completed workout today, prompt to import recent workouts
+  // Check if first visit to prompt onboarding, OR if user has a plan + Intervals.icu configured,
+  // does not already have an imported/completed workout today, AND has not already dismissed
+  // the prompt earlier today (`triatrain_dismissed_import_date === todayIso`).
   useEffect(() => {
     const hasVisited = localStorage.getItem('triatrain_visited');
     const savedPlanStr = localStorage.getItem('triatrain_training_plan');
@@ -114,10 +162,9 @@ export const App: React.FC = () => {
       return;
     }
 
-    const now = new Date();
-    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-      now.getDate()
-    ).padStart(2, '0')}`;
+    const todayIso = getLocalTodayIso();
+    const alreadyDismissedToday =
+      localStorage.getItem('triatrain_dismissed_import_date') === todayIso;
 
     const hasActivePlan = Boolean(plan && Array.isArray(plan.weeks) && plan.weeks.length > 0);
     const garminCfg = loadGarminConfig();
@@ -136,7 +183,12 @@ export const App: React.FC = () => {
         )
       );
 
-    if (hasActivePlan && hasIntervalsConfigured && !alreadyHasEntryToday) {
+    if (
+      hasActivePlan &&
+      hasIntervalsConfigured &&
+      !alreadyHasEntryToday &&
+      !alreadyDismissedToday
+    ) {
       setIsStartupImportPrompt(true);
       setIsGarminSyncOpen(true);
     }
@@ -202,12 +254,10 @@ export const App: React.FC = () => {
   const handleUpdateWorkout = (updatedWorkout: Workout) => {
     const updatedWeeks = plan.weeks.map((week) => {
       if (week.weekNumber !== updatedWorkout.weekNumber) return week;
-      return {
-        ...week,
-        workouts: week.workouts.map((w) =>
-          w.id === updatedWorkout.id ? updatedWorkout : w
-        ),
-      };
+      const nextWorkouts = week.workouts.map((w) =>
+        w.id === updatedWorkout.id ? updatedWorkout : w
+      );
+      return recomputeWeekTotals(week, nextWorkouts);
     });
 
     const updatedPlan: TrainingPlan = {
@@ -263,7 +313,7 @@ export const App: React.FC = () => {
     triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
-  // 4. Swap or Move Workouts between days in the current week
+  // 4. Swap or Move Workouts between days in the current week (supports multi-workout days!)
   const handleSwapWorkouts = (
     workoutId: string,
     targetDay: number,
@@ -280,7 +330,9 @@ export const App: React.FC = () => {
     const addDaysToStart = (days: number) => {
       const d = new Date(`${currentWeek.startDate}T12:00:00`);
       d.setDate(d.getDate() + days);
-      return d.toISOString().split('T')[0];
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+        d.getDate()
+      ).padStart(2, '0')}`;
     };
 
     const targetDate = addDaysToStart(targetDay - 1);
@@ -306,45 +358,42 @@ export const App: React.FC = () => {
         );
       }
     } else {
+      // mode === 'move' (combine onto targetDay!)
+      // Remove any placeholder 'rest' workout on targetDay so the moved workout doesn't sit next to a rest entry
+      updatedWorkouts = updatedWorkouts.filter(
+        (w) => !(w.dayOfWeek === targetDay && w.sport === 'rest')
+      );
       updatedWorkouts = updatedWorkouts.map((w) =>
         w.id === workoutId ? { ...w, dayOfWeek: targetDay, date: targetDate } : w
       );
+
+      // If sourceDay now has zero workouts left, insert a rest day entry on sourceDay
+      const remainingOnSource = updatedWorkouts.filter((w) => w.dayOfWeek === sourceDay);
+      if (remainingOnSource.length === 0) {
+        updatedWorkouts.push({
+          id: `rest-${Date.now()}-d${sourceDay}`,
+          weekNumber: currentWeek.weekNumber,
+          dayOfWeek: sourceDay,
+          date: sourceDate,
+          title: 'Repos complet & Régénération',
+          sport: 'rest',
+          category: 'recovery',
+          phase: currentWeek.phase,
+          durationMinutes: 0,
+          distanceMeters: 0,
+          targetZone: 'Z0',
+          intensityRpe: 1,
+          description: 'Journée de repos sans entraînement.',
+          coachTips: ["Le repos fait partie intégrante de l'entraînement."],
+          steps: [],
+          status: 'planned',
+        });
+      }
     }
-
-    // Recompute week volume metrics
-    let totalDur = 0;
-    let totalDist = 0;
-    let swimMin = 0;
-    let bikeMin = 0;
-    let runMin = 0;
-    let strengthMin = 0;
-
-    updatedWorkouts.forEach((wo) => {
-      totalDur += wo.durationMinutes;
-      totalDist += wo.distanceMeters / 1000;
-      if (wo.sport === 'swim') swimMin += wo.durationMinutes;
-      else if (wo.sport === 'bike') bikeMin += wo.durationMinutes;
-      else if (wo.sport === 'run') runMin += wo.durationMinutes;
-      else if (wo.sport === 'brick') {
-        bikeMin += Math.round(wo.durationMinutes * 0.75);
-        runMin += Math.round(wo.durationMinutes * 0.25);
-      } else if (wo.sport === 'strength') strengthMin += wo.durationMinutes;
-    });
 
     const updatedWeeks = plan.weeks.map((week, idx) => {
       if (idx !== currentWeekIndex) return week;
-      return {
-        ...week,
-        workouts: updatedWorkouts,
-        totalDurationMinutes: totalDur,
-        totalDistanceKm: Math.round(totalDist * 10) / 10,
-        sportBreakdown: {
-          swimMinutes: swimMin,
-          bikeMinutes: bikeMin,
-          runMinutes: runMin,
-          strengthMinutes: strengthMin,
-        },
-      };
+      return recomputeWeekTotals(week, updatedWorkouts);
     });
 
     const updatedPlan: TrainingPlan = {
@@ -361,69 +410,77 @@ export const App: React.FC = () => {
     triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
-  // 5. Add a workout to a day in the current week
-  const handleAddWorkoutToDay = (dayOfWeek: number) => {
+  // 5. Add a workout to a day in the current week (supports multi-workout days & catalog templates)
+  const handleAddWorkoutToDay = (dayOfWeek: number, template?: WorkoutTemplate) => {
     const currentWeek = plan.weeks[currentWeekIndex];
     if (!currentWeek) return;
 
     const d = new Date(`${currentWeek.startDate}T12:00:00`);
     d.setDate(d.getDate() + (dayOfWeek - 1));
-    const dayDate = d.toISOString().split('T')[0];
+    const dayDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+      d.getDate()
+    ).padStart(2, '0')}`;
 
-    const newWorkout: Workout = {
-      id: `custom-wo-${Date.now()}`,
-      weekNumber: currentWeek.weekNumber,
-      dayOfWeek,
-      date: dayDate,
-      title: `Nouvelle Séance (Jour ${dayOfWeek})`,
-      sport: 'run',
-      category: 'endurance',
-      phase: currentWeek.phase,
-      durationMinutes: 45,
-      distanceMeters: 7000,
-      targetZone: 'Z2',
-      intensityRpe: 5,
-      description:
-        'Séance ajoutée au programme. Cliquez sur "Changer" pour choisir dans le catalogue ou "Modifier" pour l\'ajuster.',
-      coachTips: ['Personnalisez les détails selon vos disponibilités du jour.'],
-      steps: [
-        {
-          type: 'warmup',
-          name: 'Échauffement progressif',
-          durationMinutes: 10,
-          targetZone: 'Z1',
-          targetDescription: 'Mise en route douce',
-        },
-        {
-          type: 'interval',
-          name: 'Corps de séance principal',
-          durationMinutes: 25,
+    const newWorkout: Workout = template
+      ? {
+          ...instantiateWorkoutFromTemplate(
+            template,
+            currentWeek.weekNumber,
+            dayOfWeek,
+            dayDate,
+            profile
+          ),
+          id: `wo-w${currentWeek.weekNumber}-d${dayOfWeek}-${Date.now()}`,
+        }
+      : {
+          id: `custom-wo-${Date.now()}`,
+          weekNumber: currentWeek.weekNumber,
+          dayOfWeek,
+          date: dayDate,
+          title: `Nouvelle Séance (Jour ${dayOfWeek})`,
+          sport: 'run',
+          category: 'endurance',
+          phase: currentWeek.phase,
+          durationMinutes: 45,
+          distanceMeters: 7000,
           targetZone: 'Z2',
-          targetDescription: 'Allure régulière',
-        },
-        {
-          type: 'cooldown',
-          name: 'Retour au calme',
-          durationMinutes: 10,
-          targetZone: 'Z1',
-          targetDescription: 'Décrassage',
-        },
-      ],
-      status: 'planned',
-    };
+          intensityRpe: 5,
+          description:
+            'Séance ajoutée au programme. Cliquez sur "Changer" pour choisir dans le catalogue ou "Modifier" pour l\'ajuster.',
+          coachTips: ['Personnalisez les détails selon vos disponibilités du jour.'],
+          steps: [
+            {
+              type: 'warmup',
+              name: 'Échauffement progressif',
+              durationMinutes: 10,
+              targetZone: 'Z1',
+              targetDescription: 'Mise en route douce',
+            },
+            {
+              type: 'interval',
+              name: 'Corps de séance principal',
+              durationMinutes: 25,
+              targetZone: 'Z2',
+              targetDescription: 'Allure régulière',
+            },
+            {
+              type: 'cooldown',
+              name: 'Retour au calme',
+              durationMinutes: 10,
+              targetZone: 'Z1',
+              targetDescription: 'Décrassage',
+            },
+          ],
+          status: 'planned',
+        };
 
     const updatedWeeks = plan.weeks.map((week, idx) => {
       if (idx !== currentWeekIndex) return week;
-      const existingOnDay = week.workouts.filter((w) => w.dayOfWeek === dayOfWeek);
-      const filteredWorkouts =
-        existingOnDay.length === 1 && existingOnDay[0].sport === 'rest'
-          ? week.workouts.filter((w) => w.id !== existingOnDay[0].id)
-          : week.workouts;
-
-      return {
-        ...week,
-        workouts: [...filteredWorkouts, newWorkout],
-      };
+      // Remove any 'rest' placeholder on that day before appending the new workout
+      const filteredWorkouts = week.workouts.filter(
+        (w) => !(w.dayOfWeek === dayOfWeek && w.sport === 'rest')
+      );
+      return recomputeWeekTotals(week, [...filteredWorkouts, newWorkout]);
     });
 
     const updatedPlan: TrainingPlan = {
@@ -438,7 +495,9 @@ export const App: React.FC = () => {
       console.error(e);
     }
 
-    setSelectedWorkout(newWorkout);
+    if (!template) {
+      setSelectedWorkout(newWorkout);
+    }
     triggerBackgroundCloudPush(profile, updatedPlan, currentWeekIndex);
   };
 
@@ -479,10 +538,7 @@ export const App: React.FC = () => {
 
     const updatedWeeks = plan.weeks.map((week, idx) => {
       if (idx !== currentWeekIndex) return week;
-      return {
-        ...week,
-        workouts: updatedWorkouts,
-      };
+      return recomputeWeekTotals(week, updatedWorkouts);
     });
 
     const updatedPlan: TrainingPlan = {
@@ -646,7 +702,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
         {activeTab === 'dashboard' && (
           <Dashboard
             plan={plan}
@@ -735,6 +791,13 @@ export const App: React.FC = () => {
       <GarminSyncModal
         isOpen={isGarminSyncOpen}
         onClose={() => {
+          if (isStartupImportPrompt) {
+            try {
+              localStorage.setItem('triatrain_dismissed_import_date', getLocalTodayIso());
+            } catch {
+              // ignore storage error
+            }
+          }
           setIsGarminSyncOpen(false);
           setIsStartupImportPrompt(false);
         }}

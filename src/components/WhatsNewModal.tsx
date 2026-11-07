@@ -91,7 +91,21 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
                     2. Centre de Configuration Unifié dans « Profil » & Ergonomie Mobile iPhone
                   </h4>
                   <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
-                    Toute la configuration (Objectif, FC & Allures, Semaine Type, Clé Garmin / Intervals.icu) est désormais regroupée dans <strong>Profil</strong>. Une fois la clé configurée, la fenêtre de synchronisation montre va droit au but, avec une barre de navigation fixe en bas d'écran sur iPhone et des cartes de repos compactes.
+                    Toute la configuration (Objectif, FC & Allures, Semaine Type, Clé Garmin / Intervals.icu) est désormais regroupée dans <strong>Profil</strong>. Une fois la clé configurée, la fenêtre de synchronisation montre va droit au but, avec une barre de navigation fixe en bas d'écran sur iPhone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0 mt-0.5">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">
+                    3. Vue Sommaire Accordéon (Style IRONMAN) & Doublés Quotidiens (Poids + Course, Vélo + Nage)
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                    Affichage ultra-épuré en barres sommaires par jour avec badges sports colorés et barre <strong>TOTAUX DE LA SEMAINE</strong>. La journée actuelle (<em>Aujourd'hui</em>) s'ouvre et se met en valeur automatiquement sans aucun défilement, et vous pouvez combiner 2+ entraînements dans la même journée.
                   </p>
                 </div>
               </div>

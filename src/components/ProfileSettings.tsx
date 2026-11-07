@@ -955,8 +955,40 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                               )}
                               {dayPref.sport === 'brick' && <option value="brick">Brique</option>}
                               {dayPref.sport === 'strength' && (
-                                <option value="strength">Gainage</option>
+                                <option value="strength">Poids / PPG</option>
                               )}
+                            </select>
+                          )}
+
+                          {dayPref.sport !== 'rest' && (
+                            <select
+                              value={dayPref.secondarySport || 'rest'}
+                              onChange={(e) => {
+                                const secVal = e.target.value as SportType;
+                                const updatedSched = currentSched.map((s) =>
+                                  s.dayOfWeek === d.day
+                                    ? {
+                                        ...s,
+                                        secondarySport: secVal === 'rest' ? undefined : secVal,
+                                      }
+                                    : s
+                                );
+                                setProfile({
+                                  ...profile,
+                                  availability: {
+                                    ...profile.availability,
+                                    weeklySchedule: updatedSched,
+                                  },
+                                });
+                              }}
+                              title="Ajouter un 2e entraînement ce même jour (Doublé : ex. Poids + Course)"
+                              className="w-full p-1.5 bg-slate-950 border border-indigo-500/40 rounded-lg text-[10px] text-indigo-300 font-semibold"
+                            >
+                              <option value="rest">+ 2e séance (Aucune)</option>
+                              <option value="strength">+ 💪 Poids / PPG</option>
+                              <option value="run">+ 🏃 Course</option>
+                              <option value="bike">+ 🚴 Vélo</option>
+                              <option value="swim">+ 🏊 Nage</option>
                             </select>
                           )}
                         </div>

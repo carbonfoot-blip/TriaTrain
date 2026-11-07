@@ -411,9 +411,10 @@ export const GarminSyncModal: React.FC<GarminSyncModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold shrink-0 self-end sm:self-center border border-slate-700 transition"
+              title="Ne plus me demander pour le reste de la journée d'aujourd'hui"
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/70 text-slate-200 hover:text-rose-200 text-xs font-bold shrink-0 self-end sm:self-center border border-slate-700 hover:border-rose-500/40 transition"
             >
-              Plus tard →
+              Non / Pas d'entraînement aujourd'hui ✕
             </button>
           </div>
         )}
