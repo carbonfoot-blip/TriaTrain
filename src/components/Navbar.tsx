@@ -136,7 +136,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                   <span className="hidden lg:inline">Nouveautés</span>
                   <span className="text-[10px] font-mono px-1 rounded bg-amber-500/20 text-amber-200">
-                    v1.2
+                    v1.3
                   </span>
                 </button>
               )}
