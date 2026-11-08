@@ -1236,7 +1236,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               className="flex items-center space-x-1.5 px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-cyan-600/30 transition"
             >
               <Save className="w-4 h-4" />
-              <span>{saveToast ? 'Sauvegardé !' : 'Appliquer et recalculer le plan'}</span>
+              <span>{saveToast ? 'Sauvegardé !' : 'Enregistrer (conserve les séances faites)'}</span>
             </button>
           )}
         </div>

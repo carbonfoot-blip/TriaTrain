@@ -11,6 +11,9 @@ import {
   CheckCircle2,
   Smartphone,
   Cloud,
+  Brain,
+  ShieldCheck,
+  Target,
 } from 'lucide-react';
 
 interface WhatsNewModalProps {
@@ -34,7 +37,7 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
               <div className="flex items-center space-x-2">
                 <h3 className="text-base font-extrabold text-white">Nouveautés & Versions de TriaTrain</h3>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700/60">
-                  v1.2 Actuelle
+                  v1.3 Actuelle
                 </span>
               </div>
               <p className="text-xs text-slate-400">Historique des fonctionnalités et améliorations de votre coach d'entraînement</p>
@@ -51,6 +54,67 @@ export const WhatsNewModal: React.FC<WhatsNewModalProps> = ({ isOpen, onClose })
 
         {/* Content */}
         <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
+          {/* VERSION 1.3 */}
+          <div className="relative p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/40 border border-indigo-500/50 shadow-xl space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <span className="px-2.5 py-0.5 rounded-md bg-gradient-to-r from-cyan-400 to-indigo-400 text-slate-950 font-black text-xs uppercase tracking-wider">
+                  Version 1.3
+                </span>
+                <span className="text-sm font-extrabold text-white">
+                  Moteur d'Analyse Coach IA & Préservation des Séances Complétées
+                </span>
+              </div>
+              <span className="text-xs font-mono text-indigo-300 bg-indigo-950/70 px-2.5 py-0.5 rounded border border-indigo-800/60">
+                8 novembre 2026
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-start space-x-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="p-2 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 shrink-0 mt-0.5">
+                  <Brain className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">
+                    1. Moteur d'Analyse d'Entraînement & Conseils du Coach (Lundi AM & Sur Demande)
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                    Chaque <strong>lundi matin</strong> à l'ouverture (ou à tout moment via le bouton <strong>🧠 Bilan Coach</strong>), TriaTrain analyse vos entraînements récents, vous félicite ou vous donne un coup de pouce, confirme votre <strong>niveau athlétique</strong>, vous indique où vous vous situez par rapport à votre objectif (<em>Indice de Préparation %</em>) et formule des conseils ciblés sur 4 axes : <strong>Volume, Intensité & Cardio, Éducatifs (Drills) et Ajustements de séances en 1 clic</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0 mt-0.5">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">
+                    2. Conservation Intégrale des Entraînements Complétés (Profil & Semaine Type)
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                    Modifiez librement votre <strong>FC Max, FTP Vélo, CSS Nage, Allures de course</strong> ou votre <strong>Semaine Type</strong> à tout moment : TriaTrain met à jour vos zones et recalcule les séances futures <strong>tout en conservant 100% de vos entraînements déjà complétés et synchronisés depuis Garmin / Intervals.icu</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="p-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 shrink-0 mt-0.5">
+                  <Target className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white">
+                    3. Vue Sommaire Accordéon (Style IRONMAN), Doublés Quotidiens & Mémoire d'Import
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                    Barres sommaires par jour avec badges sports colorés, ouverture automatique sur <em>Aujourd'hui</em> sans défilement, support des doublés (<em>Poids + Course, Vélo + Nage</em>) et mémorisation quotidienne du bouton « Non / Pas d'entraînement aujourd'hui ».
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* VERSION 1.2 */}
           <div className="relative p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/30 border border-emerald-500/40 shadow-lg space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">

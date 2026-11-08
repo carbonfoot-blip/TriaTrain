@@ -1117,3 +1117,205 @@ function createRaceDayWorkout(week: number, day: number, date: string, profile: 
     status: 'planned',
   };
 }
+
+/**
+ * Régénère le programme avec un nouveau profil (FC max, FTP, allures, ou nouvelle Semaine Type)
+ * TOUT EN PRÉSERVANT 100% des entraînements déjà complétés ou importés depuis Garmin / Intervals.icu.
+ */
+export function regeneratePlanPreservingCompletedWorkouts(
+  newProfile: AthleteProfile,
+  existingPlan?: TrainingPlan | null
+): TrainingPlan {
+  const existingStartDate = existingPlan?.weeks?.[0]?.startDate;
+  const effectiveProfile: AthleteProfile =
+    !newProfile.raceObjective.startDate && existingStartDate
+      ? {
+          ...newProfile,
+          raceObjective: {
+            ...newProfile.raceObjective,
+            startDate: existingStartDate,
+          },
+        }
+      : newProfile;
+
+  const freshPlan = generateTrainingPlan(effectiveProfile);
+
+  if (!existingPlan || !Array.isArray(existingPlan.weeks) || existingPlan.weeks.length === 0) {
+    return freshPlan;
+  }
+
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+
+  const isCompletedOrSaved = (wo: Workout): boolean =>
+    wo.sport !== 'rest' &&
+    (wo.status === 'completed' ||
+      Boolean(wo.garminActivity) ||
+      Boolean(wo.completedDurationMinutes) ||
+      Boolean(wo.completedDistanceMeters) ||
+      Boolean(wo.athleteNotes && wo.athleteNotes.trim().length > 0));
+
+  // Index completed workouts by exact calendar date AND by (weekNumber-dayOfWeek) fallback
+  const completedByDate = new Map<string, Workout[]>();
+  const completedByWeekDay = new Map<string, Workout[]>();
+  const watchSyncByDateSport = new Map<string, { pushedToWatchAt?: string; externalEventId?: string }>();
+
+  existingPlan.weeks.forEach((week) => {
+    week.workouts.forEach((wo) => {
+      if (wo.pushedToWatchAt || wo.externalEventId) {
+        watchSyncByDateSport.set(`${wo.date}-${wo.sport}`, {
+          pushedToWatchAt: wo.pushedToWatchAt,
+          externalEventId: wo.externalEventId,
+        });
+      }
+      if (isCompletedOrSaved(wo)) {
+        const listDate = completedByDate.get(wo.date) || [];
+        listDate.push(wo);
+        completedByDate.set(wo.date, listDate);
+
+        const wkDayKey = `${wo.weekNumber}-${wo.dayOfWeek}`;
+        const listWkDay = completedByWeekDay.get(wkDayKey) || [];
+        listWkDay.push(wo);
+        completedByWeekDay.set(wkDayKey, listWkDay);
+      }
+    });
+  });
+
+  if (completedByDate.size === 0 && watchSyncByDateSport.size === 0) {
+    return freshPlan;
+  }
+
+  const startDatesAligned = existingStartDate === freshPlan.weeks[0]?.startDate;
+
+  const mergedWeeks: TrainingWeek[] = freshPlan.weeks.map((freshWeek) => {
+    const mergedWeekWorkouts: Workout[] = [];
+
+    for (let dayOfWeek = 1; dayOfWeek <= 7; dayOfWeek++) {
+      const freshDayWorkouts = freshWeek.workouts.filter((w) => w.dayOfWeek === dayOfWeek);
+      const dayDate =
+        freshDayWorkouts[0]?.date || addDays(freshWeek.startDate, dayOfWeek - 1);
+
+      const savedList =
+        completedByDate.get(dayDate) ||
+        (!startDatesAligned
+          ? completedByWeekDay.get(`${freshWeek.weekNumber}-${dayOfWeek}`)
+          : undefined) ||
+        [];
+
+      if (savedList.length === 0) {
+        // Restore pushedToWatchAt metadata if any planned workout matches date + sport
+        freshDayWorkouts.forEach((fw) => {
+          const syncMeta = watchSyncByDateSport.get(`${fw.date}-${fw.sport}`);
+          if (syncMeta) {
+            mergedWeekWorkouts.push({
+              ...fw,
+              pushedToWatchAt: syncMeta.pushedToWatchAt,
+              externalEventId: syncMeta.externalEventId,
+            });
+          } else {
+            mergedWeekWorkouts.push(fw);
+          }
+        });
+        continue;
+      }
+
+      // Normalize weekNumber, dayOfWeek, and date on the preserved completed workouts
+      const normalizedSaved = savedList.map((sw, idx) => ({
+        ...sw,
+        id: sw.id || `w${freshWeek.weekNumber}-d${dayOfWeek}-saved-${idx}`,
+        weekNumber: freshWeek.weekNumber,
+        dayOfWeek,
+        date: dayDate,
+      }));
+
+      // If this day is strictly in the past (dayDate < todayIso) and the athlete already completed workout(s),
+      // keep their exact completed workout(s) for that past day without injecting uncompleted new schedule workouts.
+      if (dayDate < todayIso) {
+        mergedWeekWorkouts.push(...normalizedSaved);
+        continue;
+      }
+
+      // For Today or future days: merge completed workouts with any remaining planned workouts
+      const activeFresh = freshDayWorkouts.filter((w) => w.sport !== 'rest');
+      const usedFreshIndices = new Set<number>();
+      const dayResult: Workout[] = [];
+
+      normalizedSaved.forEach((savedWo) => {
+        // Find a matching-sport planned workout on the same day to replace
+        const matchIdx = activeFresh.findIndex(
+          (fw, idx) => !usedFreshIndices.has(idx) && fw.sport === savedWo.sport
+        );
+        if (matchIdx >= 0) {
+          usedFreshIndices.add(matchIdx);
+        } else if (dayDate === todayIso && activeFresh.length === 1 && normalizedSaved.length === 1) {
+          // If the user already trained today and changed their Semaine Type for future weeks,
+          // replace today's single uncompleted slot with the already-completed workout.
+          usedFreshIndices.add(0);
+        }
+        dayResult.push(savedWo);
+      });
+
+      // Keep any additional planned workouts for today/future (e.g. a newly added 2nd workout / doublé)
+      activeFresh.forEach((fw, idx) => {
+        if (!usedFreshIndices.has(idx)) {
+          const syncMeta = watchSyncByDateSport.get(`${fw.date}-${fw.sport}`);
+          dayResult.push(
+            syncMeta
+              ? {
+                  ...fw,
+                  pushedToWatchAt: syncMeta.pushedToWatchAt,
+                  externalEventId: syncMeta.externalEventId,
+                }
+              : fw
+          );
+        }
+      });
+
+      mergedWeekWorkouts.push(...dayResult);
+    }
+
+    // Recompute weekly totals (duration, distance, sport breakdown)
+    let totalDur = 0;
+    let totalDist = 0;
+    let swimMin = 0;
+    let bikeMin = 0;
+    let runMin = 0;
+    let strengthMin = 0;
+
+    mergedWeekWorkouts.forEach((wo) => {
+      if (wo.sport === 'rest') return;
+      const dur = wo.completedDurationMinutes ?? wo.durationMinutes;
+      const distM = wo.completedDistanceMeters ?? wo.distanceMeters;
+      totalDur += dur;
+      totalDist += distM / 1000;
+      if (wo.sport === 'swim') swimMin += dur;
+      else if (wo.sport === 'bike') bikeMin += dur;
+      else if (wo.sport === 'run') runMin += dur;
+      else if (wo.sport === 'brick') {
+        bikeMin += Math.round(dur * 0.75);
+        runMin += Math.round(dur * 0.25);
+      } else if (wo.sport === 'strength') strengthMin += dur;
+    });
+
+    return {
+      ...freshWeek,
+      workouts: mergedWeekWorkouts,
+      totalDurationMinutes: totalDur,
+      totalDistanceKm: Math.round(totalDist * 10) / 10,
+      sportBreakdown: {
+        swimMinutes: swimMin,
+        bikeMinutes: bikeMin,
+        runMinutes: runMin,
+        strengthMinutes: strengthMin,
+      },
+    };
+  });
+
+  return {
+    ...freshPlan,
+    weeks: mergedWeeks,
+  };
+}
+

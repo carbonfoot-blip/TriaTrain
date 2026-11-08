@@ -15,10 +15,12 @@ import {
 } from './data/workoutCatalog';
 import {
   generateTrainingPlan,
+  regeneratePlanPreservingCompletedWorkouts,
   shiftTrainingPlanStartDate,
   getMondayOfWeek,
   findActiveWeekIndexForToday,
 } from './utils/planGenerator';
+import { shouldTriggerMondayMorningAnalysis } from './utils/trainingAnalyzer';
 import { loadGarminConfig } from './utils/garminBridge';
 import {
   pushStateToIntervalsCloud,
@@ -34,8 +36,9 @@ import { OnboardingModal } from './components/OnboardingModal';
 import { ProfileSettings, ProfileTabSection } from './components/ProfileSettings';
 import { WeeklyScheduleModal } from './components/WeeklyScheduleModal';
 import { GarminSyncModal } from './components/GarminSyncModal';
+import { WeeklyCoachAnalysisModal } from './components/WeeklyCoachAnalysisModal';
 import { WhatsNewModal } from './components/WhatsNewModal';
-import { Sparkles, Cloud } from 'lucide-react';
+import { Sparkles, Cloud, Brain } from 'lucide-react';
 
 function getLocalTodayIso(): string {
   const now = new Date();
@@ -147,11 +150,14 @@ export const App: React.FC = () => {
   const [isWeeklyScheduleOpen, setIsWeeklyScheduleOpen] = useState<boolean>(false);
   const [isGarminSyncOpen, setIsGarminSyncOpen] = useState<boolean>(false);
   const [isStartupImportPrompt, setIsStartupImportPrompt] = useState<boolean>(false);
+  const [isCoachAnalysisOpen, setIsCoachAnalysisOpen] = useState<boolean>(false);
+  const [isMondayCoachAutoPrompt, setIsMondayCoachAutoPrompt] = useState<boolean>(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState<boolean>(false);
 
   // Check if first visit to prompt onboarding, OR if user has a plan + Intervals.icu configured,
   // does not already have an imported/completed workout today, AND has not already dismissed
   // the prompt earlier today (`triatrain_dismissed_import_date === todayIso`).
+  // Also triggers the Monday AM Coach Analysis automatically when appropriate.
   useEffect(() => {
     const hasVisited = localStorage.getItem('triatrain_visited');
     const savedPlanStr = localStorage.getItem('triatrain_training_plan');
@@ -191,6 +197,9 @@ export const App: React.FC = () => {
     ) {
       setIsStartupImportPrompt(true);
       setIsGarminSyncOpen(true);
+    } else if (hasActivePlan && shouldTriggerMondayMorningAnalysis(plan)) {
+      setIsMondayCoachAutoPrompt(true);
+      setIsCoachAnalysisOpen(true);
     }
   }, []);
 
@@ -229,7 +238,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Save to localStorage when profile changes
+  // Save to localStorage when profile or Semaine Type changes — PRESERVING 100% of completed/imported workouts!
   const handleSaveProfile = (newProfile: AthleteProfile) => {
     setProfile(newProfile);
     try {
@@ -237,8 +246,8 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-    // Regenerate plan with new profile & paces
-    const newPlan = generateTrainingPlan(newProfile);
+    // Regenerate plan with new profile & paces while preserving completed/imported workouts
+    const newPlan = regeneratePlanPreservingCompletedWorkouts(newProfile, plan);
     setPlan(newPlan);
     try {
       localStorage.setItem('triatrain_training_plan', JSON.stringify(newPlan));
@@ -720,6 +729,10 @@ export const App: React.FC = () => {
               setIsStartupImportPrompt(false);
               setIsGarminSyncOpen(true);
             }}
+            onOpenCoachAnalysis={() => {
+              setIsMondayCoachAutoPrompt(false);
+              setIsCoachAnalysisOpen(true);
+            }}
             onSwapWorkouts={handleSwapWorkouts}
             onAddWorkoutToDay={handleAddWorkoutToDay}
             onDeleteWorkout={handleDeleteWorkout}
@@ -752,7 +765,18 @@ export const App: React.FC = () => {
             <span>Programme d'entraînement Triathlon Personnalisé</span>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <button
+              onClick={() => {
+                setIsMondayCoachAutoPrompt(false);
+                setIsCoachAnalysisOpen(true);
+              }}
+              className="text-indigo-400 hover:text-indigo-300 transition flex items-center space-x-1.5 font-medium"
+            >
+              <Brain className="w-3.5 h-3.5" />
+              <span>Bilan & Conseils Coach</span>
+            </button>
+
             <button
               onClick={() => {
                 setProfileInitialSection('connections');
@@ -769,7 +793,7 @@ export const App: React.FC = () => {
               className="text-amber-400 hover:text-amber-300 transition flex items-center space-x-1.5 font-medium"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Nouveautés & Versions (v1.2)</span>
+              <span>Nouveautés & Versions (v1.3)</span>
             </button>
           </div>
         </div>
@@ -791,7 +815,8 @@ export const App: React.FC = () => {
       <GarminSyncModal
         isOpen={isGarminSyncOpen}
         onClose={() => {
-          if (isStartupImportPrompt) {
+          const wasStartup = isStartupImportPrompt;
+          if (wasStartup) {
             try {
               localStorage.setItem('triatrain_dismissed_import_date', getLocalTodayIso());
             } catch {
@@ -800,6 +825,12 @@ export const App: React.FC = () => {
           }
           setIsGarminSyncOpen(false);
           setIsStartupImportPrompt(false);
+
+          // Si nous sommes lundi matin et que le Bilan Coach n'a pas encore été vu aujourd'hui, l'ouvrir après l'import
+          if (wasStartup && shouldTriggerMondayMorningAnalysis(plan)) {
+            setIsMondayCoachAutoPrompt(true);
+            setIsCoachAnalysisOpen(true);
+          }
         }}
         currentWeek={plan.weeks[currentWeekIndex] || plan.weeks[0]}
         profile={profile}
@@ -813,6 +844,25 @@ export const App: React.FC = () => {
           setIsProfileOpen(true);
         }}
         onRestoreCloudSnapshot={handleRestoreCloudSnapshot}
+      />
+
+      <WeeklyCoachAnalysisModal
+        isOpen={isCoachAnalysisOpen}
+        onClose={() => {
+          setIsCoachAnalysisOpen(false);
+          setIsMondayCoachAutoPrompt(false);
+        }}
+        plan={plan}
+        profile={profile}
+        currentWeekIndex={currentWeekIndex}
+        isMondayAutoPrompt={isMondayCoachAutoPrompt}
+        onAddSuggestedWorkoutToCurrentWeek={(dayOfWeek, tpl) =>
+          handleAddWorkoutToDay(dayOfWeek, tpl)
+        }
+        onOpenProfileSettings={() => {
+          setProfileInitialSection('physio');
+          setIsProfileOpen(true);
+        }}
       />
 
       <OnboardingModal

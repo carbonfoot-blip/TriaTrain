@@ -14,6 +14,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Brain,
 } from 'lucide-react';
 import { AthleteProfile, TrainingPlan, Workout, WorkoutStatus } from '../types/triathlon';
 import { WorkoutTemplate } from '../data/workoutCatalog';
@@ -30,6 +31,7 @@ interface DashboardProps {
   onOpenOnboarding: () => void;
   onOpenWeeklySchedule?: () => void;
   onOpenGarminSync?: () => void;
+  onOpenCoachAnalysis?: () => void;
   onSwapWorkouts?: (workoutId: string, targetDay: number, mode: 'swap' | 'move') => void;
   onAddWorkoutToDay?: (dayOfWeek: number, template?: WorkoutTemplate) => void;
   onDeleteWorkout?: (workoutId: string) => void;
@@ -45,6 +47,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onToggleWorkoutStatus,
   onOpenWeeklySchedule,
   onOpenGarminSync,
+  onOpenCoachAnalysis,
   onSwapWorkouts,
   onAddWorkoutToDay,
   onDeleteWorkout,
@@ -192,6 +195,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             {/* Action Buttons */}
             <div className="flex items-center gap-1.5">
+              {onOpenCoachAnalysis && (
+                <button
+                  type="button"
+                  onClick={onOpenCoachAnalysis}
+                  className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 bg-gradient-to-r from-indigo-950/90 to-cyan-950/90 hover:from-indigo-900 hover:to-cyan-900 border border-indigo-400/50 text-indigo-200 text-xs font-extrabold rounded-xl transition shadow-sm"
+                  title="Analyser mes entraînements récents, mon niveau et obtenir les conseils du Coach"
+                >
+                  <Brain className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Bilan Coach</span>
+                </button>
+              )}
+
               {onOpenGarminSync && (
                 <button
                   type="button"
